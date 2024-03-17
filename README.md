@@ -17,7 +17,7 @@ Ensure that [Rust](https://www.rust-lang.org/tools/install) and [git](https://gi
 Clone the repository:
 ```
 git clone https://github.com/expiredhotdog/camonanowallet.git
-cd camonano
+cd camonanowallet
 ```
 
 Compile using Cargo:
