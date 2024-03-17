@@ -1,0 +1,17 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nanopyrs = { version = "0.4.0", features = ["all"] }
+thiserror = "1.0.49"
+zeroize = { version = "1.6.0", features = ["zeroize_derive"] }
+rand = "0.8.5"
+hex = "0.4.3"
+log = "0.4.21"
+serde = { version = "1.0.196", features = ["derive"] }
+serde_with = "3.7.0"
+futures = "0.3.30"
