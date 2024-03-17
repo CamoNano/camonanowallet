@@ -182,6 +182,10 @@ pub async fn receive(client: &Client, mut receivables: Vec<Receivable>) -> Recei
     let mut successfully_received: Vec<[u8; 32]> = vec![];
 
     let chunks = chunks_receivable(client, receivables.clone());
+    if chunks.is_empty() {
+        info!("No transactions to receive. Maybe refresh?");
+    }
+
     for (i, chunk) in chunks.iter().enumerate() {
         // run every future in the chunk in parallel
         let batch_future = future::join_all(chunk.iter().map(|receivable| {
