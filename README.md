@@ -6,7 +6,7 @@ This wallet is targeted towards more advanced users, and is intended to act as a
 
 ## Installation
 
-This wallet can be downloaded from the [releases page](TODO: URL), or compiled from source.
+This wallet can be downloaded from the [releases page](https://github.com/expiredhotdog/camonanowallet/releases), or compiled from source.
 
 Antivirus software may raise a false alarm when trying to use this wallet.
 
