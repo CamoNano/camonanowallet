@@ -282,9 +282,13 @@ impl ReceiveArgs {
                 .collect::<Option<Vec<Receivable>>>()
                 .ok_or(ClientError::AccountNotFound)?
         } else {
-            println!("Specify which transactions to receive by account (-a) or block (-b):");
             let mut receivables: Vec<&Receivable> = cached_receivable.values().collect();
             receivables.sort_by(|a, b| b.amount.cmp(&a.amount));
+            if receivables.is_empty() {
+                println!("No transactions to receive.");
+            } else {
+                println!("Specify which transactions to receive by account (-a) or block (-b):");
+            }
             for receivable in receivables {
                 println!(
                     "{}: {} ({} Nano)",
