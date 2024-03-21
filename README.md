@@ -1,4 +1,4 @@
-## Camo Nano Wallet
+# Camo Nano Wallet
 
 A command-line, privacy-oriented wallet for the [Nano](https://nano.org/) cryptocurrency.
 
@@ -12,7 +12,16 @@ Antivirus software may raise a false alarm when trying to use this wallet.
 
 ### Compiling from Source
 
+#### Prerequisites
+
 Ensure that [Rust](https://www.rust-lang.org/tools/install) and [git](https://github.com/git-guides/install-git) are installed on your system before proceeding.
+
+For Debian-based systems, you may have to install some additional dependencies:
+```
+sudo apt install libssl-dev pkg-config
+```
+
+#### Compiling
 
 Clone the repository:
 ```
@@ -29,6 +38,8 @@ Run:
 ```
 ./target/release/camonano
 ```
+
+If you experience an error while attempting to compile from source, please open an issue so that it can be resolved.
 
 ## Usage
 
@@ -119,3 +130,4 @@ This software has *not* been professionally audited. I cannot guarantee that thi
 ## Licensing
 
 This software is open source and licensed under the MIT license. See the `LICENSE` file for more details.
+
