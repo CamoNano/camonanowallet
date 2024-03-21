@@ -13,6 +13,7 @@ Antivirus software may raise a false alarm when trying to use this wallet.
 ### Compiling from Source
 
 Ensure that [Rust](https://www.rust-lang.org/tools/install), [git](https://github.com/git-guides/install-git) and some other dependencies are installed on your system before proceeding.
+For Debian based systems you may try:
 ```
 sudo apt install cargo git libssl-dev pkg-config
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
