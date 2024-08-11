@@ -5,6 +5,10 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+fn default_false() -> bool {
+    false
+}
+
 #[allow(non_snake_case)]
 #[serde_as]
 #[derive(Debug, Clone, Zeroize, ZeroizeOnDrop, Serialize, Deserialize)]
@@ -36,6 +40,9 @@ pub struct CoreClientConfig {
     pub RPC_ACCOUNT_HISTORY_BATCH_SIZE: usize,
     /// transactions will be received in batches of this size
     pub RPC_RECEIVE_TRANSACTIONS_BATCH_SIZE: usize,
+    /// Enable setting work cache (currently not used effectively)
+    #[serde(default = "default_false")]
+    pub ENABLE_WORK_CACHE: bool,
 
     /// Default version to use for generating `camo_` addresses
     pub DEFAULT_CAMO_VERSIONS: Vec<CamoVersion>,
@@ -66,6 +73,7 @@ impl CoreClientConfig {
             RPC_ACCOUNTS_RECEIVABLE_BATCH_SIZE: 25,
             RPC_ACCOUNT_HISTORY_BATCH_SIZE: 50,
             RPC_RECEIVE_TRANSACTIONS_BATCH_SIZE: 3,
+            ENABLE_WORK_CACHE: false,
 
             DEFAULT_CAMO_VERSIONS: vec![CamoVersion::One],
 

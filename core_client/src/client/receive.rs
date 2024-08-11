@@ -95,7 +95,7 @@ pub async fn get_accounts_receivable(
     Ok((receivable.into_iter().flatten().collect(), rpc_failures).into())
 }
 
-/// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work.
+/// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work if enabled.
 pub async fn receive_single(
     client: &CoreClient,
     receivable: &Receivable,
@@ -137,7 +137,7 @@ fn chunks_receivable(client: &CoreClient, receivables: Vec<Receivable>) -> Vec<V
     chunks
 }
 
-/// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work.
+/// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work if enabled.
 ///
 /// This is intended to be used internally, where we cannot rely on the DB being synced.
 async fn receive_single_unsynced(
@@ -152,7 +152,7 @@ async fn receive_single_unsynced(
         .await
 }
 
-/// Receive transactions, returning the new frontiers of those accounts (the `receive` blocks), **with** cached work.
+/// Receive transactions, returning the new frontiers of those accounts (the `receive` blocks), **with** cached work if enabled.
 ///
 /// Transactions are processed in batches of size `config::RPC_RECEIVE_TRANSACTIONS_BATCH_SIZE`.
 pub async fn receive(client: &CoreClient, mut receivables: Vec<Receivable>) -> ReceiveResult {
