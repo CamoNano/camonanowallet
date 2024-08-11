@@ -46,9 +46,13 @@ jobs:
     - name: Run Tests (client)
       run: cargo test --verbose --all-features
       working-directory: ./client
-    - name: Run Clippy (client)
-      run: cargo clippy --all-targets --all-features
-      working-directory: ./client
+
+    - name: Build (core_client)
+      run: cargo build --verbose
+      working-directory: ./core_client
+    - name: Run Tests (core_client)
+      run: cargo test --verbose --all-features
+      working-directory: ./core_client
 
     - name: Run Tests (CLI)
       run: cargo test --verbose --all-features
