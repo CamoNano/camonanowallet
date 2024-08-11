@@ -1,5 +1,5 @@
-use super::config::ClientConfig;
-use super::error::ClientError;
+use super::config::CoreClientConfig;
+use super::error::CoreClientError;
 use log::debug;
 use nanopyrs::{camo::*, Account, Block, Key, SecretBytes};
 use serde::{Deserialize, Serialize};
@@ -54,7 +54,7 @@ macro_rules! search_db {
         $db.info
             .iter()
             .position(|info| &info.account == $value)
-            .ok_or(ClientError::AccountNotFound)
+            .ok_or(CoreClientError::AccountNotFound)
             .map(|index| $db.info.remove(index))
     }};
 
@@ -104,17 +104,17 @@ impl<T: Clone + Eq + Zeroize + Display> GenericInfoDB<T> {
     /// Otherwise, returns whether or not the DB already contained the account.
     pub fn insert(
         &mut self,
-        config: &ClientConfig,
+        config: &CoreClientConfig,
         info: GenericInfo<T>,
-    ) -> Result<bool, ClientError> {
+    ) -> Result<bool, CoreClientError> {
         if self.info.len() >= config.DB_NUMBER_OF_ACCOUNTS_LIMIT {
-            return Err(ClientError::DBAccountLimitReached);
+            return Err(CoreClientError::DBAccountLimitReached);
         }
         Ok(self.force_insert(info))
     }
 
     /// Remove an account from the DB, returning the account info if successful.
-    pub fn remove(&mut self, account: &T) -> Result<GenericInfo<T>, ClientError> {
+    pub fn remove(&mut self, account: &T) -> Result<GenericInfo<T>, CoreClientError> {
         search_db!(mut self, Remove, account)
     }
 
@@ -209,7 +209,7 @@ impl DerivedAccountDB {
     }
 
     /// Remove an account from the DB, returning the account info if successful.
-    pub fn remove(&mut self, account: &Account) -> Result<DerivedAccountInfo, ClientError> {
+    pub fn remove(&mut self, account: &Account) -> Result<DerivedAccountInfo, CoreClientError> {
         search_db!(mut self, Remove, account)
     }
 
@@ -259,11 +259,11 @@ pub struct WalletSeed {
     bytes: SecretBytes<32>,
 }
 impl WalletSeed {
-    pub fn from_seed_hex(mut seed: String) -> Result<WalletSeed, ClientError> {
+    pub fn from_seed_hex(mut seed: String) -> Result<WalletSeed, CoreClientError> {
         let seed_bytes: [u8; 32] = hex::decode(&seed)
-            .map_err(|_| ClientError::InvalidSeed)?
+            .map_err(|_| CoreClientError::InvalidSeed)?
             .try_into()
-            .or(Err(ClientError::InvalidSeed))?;
+            .or(Err(CoreClientError::InvalidSeed))?;
         let result = Ok(WalletSeed::from(seed_bytes));
         seed.zeroize();
         result
@@ -433,10 +433,14 @@ impl WalletDB {
     }
 
     /// sign the given block, returning it with a signature attached
-    pub fn sign_block(&self, seed: &WalletSeed, mut block: Block) -> Result<Block, ClientError> {
+    pub fn sign_block(
+        &self,
+        seed: &WalletSeed,
+        mut block: Block,
+    ) -> Result<Block, CoreClientError> {
         let key = self
             .find_key(seed, &block.account)
-            .ok_or(ClientError::AccountNotFound)?;
+            .ok_or(CoreClientError::AccountNotFound)?;
         block.sign(&key);
         Ok(block)
     }
@@ -461,21 +465,23 @@ mod tests {
     fn fake_camo_account() -> CamoAccount {
         "camo_18wydi3gmaw4aefwhkijrjw4qd87i4tc85wbnij95gz4em3qssickhpoj9i4t6taqk46wdnie7aj8ijrjhtcdgsp3c1oqnahct3otygxx4k7f3o4".parse().unwrap()
     }
-    fn fake_seed() -> Result<WalletSeed, ClientError> {
+    fn fake_seed() -> Result<WalletSeed, CoreClientError> {
         let seed_hex = "c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8";
         WalletSeed::from_seed_hex(seed_hex.into())
     }
-    fn fake_db() -> Result<WalletDB, ClientError> {
+    fn fake_db() -> Result<WalletDB, CoreClientError> {
         let seed = fake_seed()?;
         let mut db = WalletDB::default();
 
         let (_, info) = seed.get_key(91);
-        db.account_db.insert(&ClientConfig::test_default(), info)?;
+        db.account_db
+            .insert(&CoreClientConfig::test_default(), info)?;
         let (_, info) = seed.get_key(92);
-        db.account_db.insert(&ClientConfig::test_default(), info)?;
+        db.account_db
+            .insert(&CoreClientConfig::test_default(), info)?;
         let (camo_key, camo_info) = seed.get_camo_key(99, camo_versions()).unwrap();
         db.camo_account_db
-            .insert(&ClientConfig::test_default(), camo_info.clone())?;
+            .insert(&CoreClientConfig::test_default(), camo_info.clone())?;
         let camo_account = camo_key.to_camo_account();
 
         let (sender_ecdh, notification) = camo_account.sender_ecdh(&fake_key(), [29; 32]);

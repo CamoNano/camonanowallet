@@ -1,5 +1,5 @@
-use client::rpc::{Rpc, RpcCommands};
-use client::Account;
+use core_client::rpc::{Rpc, RpcCommands};
+use core_client::Account;
 
 pub fn default_representatives() -> Vec<Account> {
     vec![

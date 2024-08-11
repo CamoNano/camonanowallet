@@ -1,6 +1,6 @@
 use super::RpcManager;
-use crate::config::ClientConfig;
-use crate::error::ClientError;
+use crate::config::CoreClientConfig;
+use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
 use crate::rpc::{RpcFailures, RpcResult, RpcSuccess};
 use futures::future;
@@ -18,7 +18,7 @@ impl ClientRpc {
     /// Get work for this frontier, either cached locally or from an RPC
     pub async fn get_work(
         &self,
-        config: &ClientConfig,
+        config: &CoreClientConfig,
         frontier: &FrontierInfo,
     ) -> RpcResult<[u8; 8]> {
         if let Some(work) = frontier.cached_work() {
@@ -30,7 +30,11 @@ impl ClientRpc {
     }
 
     /// Publish a block to the network
-    pub async fn publish(&self, config: &ClientConfig, block: Block) -> RpcResult<FrontierInfo> {
+    pub async fn publish(
+        &self,
+        config: &CoreClientConfig,
+        block: Block,
+    ) -> RpcResult<FrontierInfo> {
         let (_, failures) = self.internal().process(config, &block).await?.into();
         let info = FrontierInfo::new(block, None);
         Ok((info, failures).into())
@@ -39,7 +43,7 @@ impl ClientRpc {
     /// Download the frontiers of the given accounts.
     pub async fn download_frontiers(
         &self,
-        config: &ClientConfig,
+        config: &CoreClientConfig,
         frontiers_db: &FrontiersDB,
         accounts: &[Account],
     ) -> RpcResult<NewFrontiers> {
@@ -96,7 +100,7 @@ impl ClientRpc {
     /// This is intended to be used internally, where we cannot rely on the DB being synced.
     pub(crate) async fn get_work_and_publish_unsynced(
         &self,
-        config: &ClientConfig,
+        config: &CoreClientConfig,
         frontier: &FrontierInfo,
         mut block: Block,
     ) -> RpcResult<FrontierInfo> {
@@ -115,13 +119,13 @@ impl ClientRpc {
     /// Get work for a block, and publish it to the network.
     pub async fn get_work_and_publish(
         &self,
-        config: &ClientConfig,
+        config: &CoreClientConfig,
         frontiers_db: &FrontiersDB,
         block: Block,
     ) -> RpcResult<FrontierInfo> {
         let frontier = frontiers_db
             .account_frontier(&block.account)
-            .ok_or(ClientError::AccountNotFound)?;
+            .ok_or(CoreClientError::AccountNotFound)?;
         self.get_work_and_publish_unsynced(config, frontier, block)
             .await
     }
@@ -132,7 +136,7 @@ impl ClientRpc {
     /// This is intended to be used internally, where we cannot rely on the DB being synced.
     pub(crate) async fn auto_publish_unsynced(
         &self,
-        config: &ClientConfig,
+        config: &CoreClientConfig,
         frontier: &FrontierInfo,
         block: Block,
     ) -> RpcResult<FrontierInfo> {
@@ -159,18 +163,18 @@ impl ClientRpc {
     /// Also cache work for the next block.
     pub async fn auto_publish(
         &self,
-        config: &ClientConfig,
+        config: &CoreClientConfig,
         frontiers_db: &FrontiersDB,
         block: Block,
     ) -> RpcResult<FrontierInfo> {
         let frontier = frontiers_db
             .account_frontier(&block.account)
-            .ok_or(ClientError::AccountNotFound)?;
+            .ok_or(CoreClientError::AccountNotFound)?;
         self.auto_publish_unsynced(config, frontier, block).await
     }
 
     /// Handle the given RPC failures, adjusting future RPC selections as necessary
-    pub fn handle_failures(&mut self, config: &mut ClientConfig, failures: RpcFailures) {
+    pub fn handle_failures(&mut self, config: &mut CoreClientConfig, failures: RpcFailures) {
         self.internal().handle_failures(config, failures)
     }
 }

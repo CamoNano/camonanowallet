@@ -1,149 +1,18 @@
-use super::defaults::{default_representatives, default_rpcs};
 use super::error::CliError;
-use super::types::CamoTxSummary;
 use super::CliClient;
-use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
-    Aes256Gcm, Error as AESError, Key, Nonce,
-};
-use argon2::{Argon2, Error as Argon2Error};
-use bincode::Error as BincodeError;
+use aes_gcm::Error as AESError;
 use client::{
-    frontiers::FrontiersDB,
-    wallet::{WalletDB, WalletSeed},
-    Client, ClientConfig, Receivable, SecretBytes,
+    core::{CoreClient, CoreClientConfig, SecretBytes},
+    storage::{EncryptedWallet, WalletData},
+    Client, ClientConfig, ClientError,
 };
-use confy::ConfyError;
-use hex::FromHexError;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use thiserror::Error;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 const APP_DATA_FOLDER_NAME: &str = "CamoNano-rs";
 
-#[allow(non_snake_case)]
-#[derive(Debug, Clone, Zeroize, Serialize, Deserialize)]
-pub struct ClientConfigConfy {
-    config: ClientConfig,
-}
-impl Default for ClientConfigConfy {
-    fn default() -> Self {
-        ClientConfig::default_with(default_representatives(), default_rpcs()).into()
-    }
-}
-impl From<ClientConfig> for ClientConfigConfy {
-    fn from(value: ClientConfig) -> Self {
-        ClientConfigConfy { config: value }
-    }
-}
-impl From<ClientConfigConfy> for ClientConfig {
-    fn from(value: ClientConfigConfy) -> Self {
-        value.config
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum StorageError {
-    #[error("invalid configuration file: {0}")]
-    InvalidConfig(String),
-    #[error("Invalid hex value: {0}")]
-    InvalidHex(#[from] FromHexError),
-    #[error("Error while serializing/deserializing data: {0}")]
-    SerializationError(#[from] BincodeError),
-    #[error("error while deriving encryption key from password: {0}")]
-    Argon2Error(Argon2Error),
-    #[error("Error while encrypting/decrypting data: {0}")]
-    EncryptionError(AESError),
-    #[error("Invalid password for wallet: {0}")]
-    InvalidPassword(AESError),
-    #[error(transparent)]
-    DiskError(#[from] ConfyError),
-    #[error("The given wallet name is invalid")]
-    InvalidWalletName,
-    #[error("No wallet of the given name could be found")]
-    WalletNotFound,
-    #[error("A wallet of the same name already exists")]
-    WalletAlreadyExists,
-}
-impl From<Argon2Error> for StorageError {
-    fn from(value: Argon2Error) -> Self {
-        StorageError::Argon2Error(value)
-    }
-}
-
 fn is_valid_name(name: &str) -> bool {
     name.chars().all(|c| c.is_alphanumeric()) && name != "config"
-}
-
-/// Slow hash for password hashing
-fn key_hash(key: &[u8], salt: &[u8]) -> Result<Key<Aes256Gcm>, StorageError> {
-    let mut output = [0_u8; 32];
-    Argon2::default().hash_password_into(key, salt, &mut output)?;
-    Ok(output.into())
-}
-
-#[derive(Debug, Zeroize, Serialize, Deserialize)]
-struct WalletData {
-    seed: WalletSeed,
-    wallet_db: WalletDB,
-    frontiers_db: FrontiersDB,
-    #[zeroize(skip)]
-    cached_receivable: HashMap<[u8; 32], Receivable>,
-    camo_history: Vec<CamoTxSummary>,
-}
-impl WalletData {
-    fn encrypt(
-        mut self,
-        name: &str,
-        key: &SecretBytes<32>,
-    ) -> Result<EncryptedWallet, StorageError> {
-        let salt = rand::random::<[u8; 32]>();
-        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-        let key = key_hash(key.as_bytes(), &salt)?;
-
-        let cipher = Aes256Gcm::new(&key);
-        let mut data = bincode::serialize(&self)?;
-        let encrypted = cipher
-            .encrypt(&nonce, data.as_ref())
-            .map_err(StorageError::EncryptionError)?;
-
-        self.zeroize();
-        data.zeroize();
-        Ok(EncryptedWallet {
-            name: name.into(),
-            salt: hex::encode(salt),
-            nonce: hex::encode(nonce),
-            data: hex::encode(encrypted),
-        })
-    }
-}
-
-#[derive(Debug, Clone, Zeroize, ZeroizeOnDrop, Serialize, Deserialize)]
-struct EncryptedWallet {
-    name: String,
-    salt: String,
-    nonce: String,
-    data: String,
-}
-impl EncryptedWallet {
-    fn decrypt(&self, key: &SecretBytes<32>) -> Result<WalletData, StorageError> {
-        let salt = hex::decode(&self.salt)?;
-        let nonce = hex::decode(&self.nonce)?;
-        let nonce = Nonce::from_slice(&nonce);
-        let key = key_hash(key.as_bytes(), &salt)?;
-
-        let cipher = Aes256Gcm::new(&key);
-        let mut data = hex::decode(&self.data)?;
-        let mut plaintext = cipher
-            .decrypt(nonce, data.as_ref())
-            .map_err(StorageError::InvalidPassword)?;
-
-        let wallet: WalletData = bincode::deserialize(&plaintext)?;
-        plaintext.zeroize();
-        data.zeroize();
-        Ok(wallet)
-    }
 }
 
 #[derive(Debug, Clone, Default, Zeroize, ZeroizeOnDrop, Serialize, Deserialize)]
@@ -166,14 +35,15 @@ impl UserWallets {
 
     fn save_wallet_override(
         &mut self,
-        cli_client: &CliClient,
+        client: &CliClient,
         name: &str,
         key: &SecretBytes<32>,
     ) -> Result<(), CliError> {
+        let cli_client = &client.client;
         let client = cli_client.internal.clone();
 
         if !is_valid_name(name) {
-            return Err(StorageError::InvalidWalletName.into());
+            return Err(CliError::InvalidWalletName);
         }
         if self.wallet_exists(name) {
             self.delete_wallet(name, key)?
@@ -198,39 +68,40 @@ impl UserWallets {
         key: &SecretBytes<32>,
     ) -> Result<(), CliError> {
         if self.wallet_exists(name) {
-            return Err(StorageError::WalletAlreadyExists.into());
+            return Err(CliError::WalletAlreadyExists);
         }
         self.save_wallet_override(cli_client, name, key)
     }
 
     fn load_wallet(
         &self,
-        config: ClientConfig,
+        config: CoreClientConfig,
         name: &str,
         key: SecretBytes<32>,
     ) -> Result<CliClient, CliError> {
         if !self.wallet_exists(name) {
-            return Err(StorageError::WalletNotFound.into());
+            return Err(CliError::WalletNotFound);
         }
         let data = self
             .wallets
             .iter()
             .find(|wallet| wallet.name == name)
-            .ok_or(StorageError::WalletNotFound)?
+            .ok_or(CliError::WalletNotFound)?
             .decrypt(&key)?;
-        let client = Client {
+        let client = CoreClient {
             seed: data.seed,
             config,
             wallet_db: data.wallet_db,
             frontiers_db: data.frontiers_db,
         };
-        Ok(CliClient {
+        Ok(Client {
             name: name.into(),
             key,
             internal: client,
             cached_receivable: data.cached_receivable,
             camo_history: data.camo_history,
-        })
+        }
+        .into())
     }
 
     fn delete_wallet(&mut self, name: &str, key: &SecretBytes<32>) -> Result<(), CliError> {
@@ -238,12 +109,14 @@ impl UserWallets {
             .wallets
             .iter()
             .position(|wallet| wallet.name == name)
-            .ok_or(CliError::StorageError(StorageError::WalletNotFound))?;
+            .ok_or(CliError::WalletNotFound)?;
         if self.wallets[index].decrypt(key).is_ok() {
             self.wallets.remove(index);
             Ok(())
         } else {
-            Err(StorageError::InvalidPassword(AESError).into())
+            Err(CliError::ClientError(ClientError::InvalidPassword(
+                AESError,
+            )))
         }
     }
 }
@@ -258,13 +131,13 @@ pub fn config_location() -> Result<String, CliError> {
 }
 
 /// Save the config file to disk
-pub fn save_config(config: ClientConfigConfy) -> Result<(), CliError> {
+pub fn save_config(config: ClientConfig) -> Result<(), CliError> {
     Ok(confy::store(APP_DATA_FOLDER_NAME, "config", config)?)
 }
 
 /// Load the config file from disk
-pub fn load_config() -> Result<ClientConfig, CliError> {
-    let config: ClientConfigConfy = confy::load(APP_DATA_FOLDER_NAME, "config")?;
+pub fn load_config() -> Result<CoreClientConfig, CliError> {
+    let config: ClientConfig = confy::load(APP_DATA_FOLDER_NAME, "config")?;
     Ok(config.into())
 }
 

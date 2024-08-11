@@ -1,4 +1,4 @@
-use crate::{error::ClientError, ClientConfig};
+use crate::{error::CoreClientError, CoreClientConfig};
 use log::{debug, error};
 use nanopyrs::{block::check_work, rpc::BlockInfo, Account, Block, BlockType, Signature};
 use serde::{Deserialize, Serialize};
@@ -99,7 +99,7 @@ impl FrontierInfo {
         self.cached_work
     }
 
-    pub fn set_work(&mut self, config: &ClientConfig, work: [u8; 8]) {
+    pub fn set_work(&mut self, config: &CoreClientConfig, work: [u8; 8]) {
         self.cached_work = Some(work);
         if !self.has_valid_work(config) {
             let account = &self.block.account;
@@ -116,7 +116,7 @@ impl FrontierInfo {
         self.cached_work = None
     }
 
-    pub fn has_valid_work(&mut self, config: &ClientConfig) -> bool {
+    pub fn has_valid_work(&mut self, config: &CoreClientConfig) -> bool {
         if let Some(work) = self.cached_work {
             check_work(self.work_hash(), config.WORK_DIFFICULTY.to_be_bytes(), work)
         } else {
@@ -163,7 +163,7 @@ impl FrontiersDB {
     /// If `Ok()`:
     ///     - If the account already has an entry in the DB, then return `Ok(Some(index))` to replace.
     ///     - If the account does *not* have an entry in the DB, then return `Ok(None)`.
-    fn _could_insert(&self, new: &FrontierInfo) -> Result<Option<usize>, ClientError> {
+    fn _could_insert(&self, new: &FrontierInfo) -> Result<Option<usize>, CoreClientError> {
         let block = &new.block;
         let mut total = self.frontiers_balance;
 
@@ -176,13 +176,13 @@ impl FrontiersDB {
 
             // epoch blocks sanity check
             if block.block_type.is_epoch() && !block.follows_epoch_rules(&prev.block) {
-                return Err(ClientError::InvalidEpochBlock);
+                return Err(CoreClientError::InvalidEpochBlock);
             }
         }
 
         // balance sanity check
         if total.checked_add(block.balance).is_none() {
-            return Err(ClientError::FrontierBalanceOverflow);
+            return Err(CoreClientError::FrontierBalanceOverflow);
         }
 
         Ok(index)
@@ -191,7 +191,10 @@ impl FrontiersDB {
     /// If `Ok()`:
     ///     - If the account already has an entry in the DB, then return `Ok(Some(index))` to replace.
     ///     - If the account does *not* have an entry in the DB, then return `Ok(None)`.
-    fn _could_insert_many(&self, new: &[FrontierInfo]) -> Result<Vec<Option<usize>>, ClientError> {
+    fn _could_insert_many(
+        &self,
+        new: &[FrontierInfo],
+    ) -> Result<Vec<Option<usize>>, CoreClientError> {
         new.iter()
             .map(|frontier| self._could_insert(frontier))
             .collect()
@@ -235,19 +238,19 @@ impl FrontiersDB {
     }
 
     /// Add or update an account's frontier.
-    fn _insert(&mut self, new: FrontierInfo) -> Result<(), ClientError> {
+    fn _insert(&mut self, new: FrontierInfo) -> Result<(), CoreClientError> {
         self._add_or_update(self._could_insert(&new)?, new);
         Ok(())
     }
 
     /// Check whether or not the given downloaded frontiers could be added to the DB
-    pub(crate) fn check_new(&self, downloaded: &NewFrontiers) -> Result<(), ClientError> {
+    pub(crate) fn check_new(&self, downloaded: &NewFrontiers) -> Result<(), CoreClientError> {
         self._could_insert_many(&downloaded.new)?;
         Ok(())
     }
 
     /// Add or update several accounts' frontiers, also handling unopened accounts.
-    pub fn insert(&mut self, new: NewFrontiers) -> Result<(), ClientError> {
+    pub fn insert(&mut self, new: NewFrontiers) -> Result<(), CoreClientError> {
         self._could_insert_many(&new.new)?;
         for info in new.new {
             let index = self._could_insert(&info)?;
@@ -263,14 +266,17 @@ impl FrontiersDB {
     }
 
     /// Remove an account from the database, and return whether or not it was in the database
-    pub fn remove(&mut self, account: &Account) -> Result<FrontierInfo, ClientError> {
+    pub fn remove(&mut self, account: &Account) -> Result<FrontierInfo, CoreClientError> {
         search!(self.frontiers, Account, account)
             .map(|index| self._remove(index))
-            .ok_or(ClientError::AccountNotFound)
+            .ok_or(CoreClientError::AccountNotFound)
     }
 
     /// Remove several accounts from the database
-    pub fn remove_many(&mut self, accounts: &[Account]) -> Result<Vec<FrontierInfo>, ClientError> {
+    pub fn remove_many(
+        &mut self,
+        accounts: &[Account],
+    ) -> Result<Vec<FrontierInfo>, CoreClientError> {
         accounts
             .iter()
             .map(|account| self.remove(account))
@@ -324,12 +330,12 @@ impl FrontiersDB {
         &mut self,
         account: &Account,
         work: [u8; 8],
-    ) -> Result<(), ClientError> {
+    ) -> Result<(), CoreClientError> {
         if let Some(info) = self.account_frontier_mut(account) {
             info.cached_work = Some(work);
             Ok(())
         } else {
-            Err(ClientError::AccountNotFound)
+            Err(CoreClientError::AccountNotFound)
         }
     }
 
@@ -374,7 +380,7 @@ mod tests {
             .unwrap()
     }
 
-    fn fake_db() -> Result<FrontiersDB, ClientError> {
+    fn fake_db() -> Result<FrontiersDB, CoreClientError> {
         let mut db = FrontiersDB::default();
         let mut frontiers: NewFrontiers = vec![
             FrontierInfo::new_unopened(fake_account_1()),

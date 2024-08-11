@@ -1,9 +1,9 @@
-use super::error::CliError;
+use super::error::ClientError;
 use super::types::Amount;
-use super::CliClient;
-use client::{Account, CamoAccount, Client, Receivable};
+use super::CliFrontend;
+use core_client::{Account, CamoAccount, CoreClient, Receivable};
 
-fn get_display_balance(client: &Client, account: &Account) -> String {
+fn get_display_balance(client: &CoreClient, account: &Account) -> String {
     let amount: Amount = client
         .frontiers_db
         .account_balance(account)
@@ -13,7 +13,7 @@ fn get_display_balance(client: &Client, account: &Account) -> String {
 }
 
 /// Returns `Vec<(index, account)>`, sorted
-fn get_normal_accounts(client: &Client) -> Vec<(u32, Account)> {
+fn get_normal_accounts(client: &CoreClient) -> Vec<(u32, Account)> {
     let mut accounts: Vec<(u32, Account)> = client
         .wallet_db
         .account_db
@@ -26,7 +26,7 @@ fn get_normal_accounts(client: &Client) -> Vec<(u32, Account)> {
 }
 
 /// Returns `Vec<(index, account)>`, sorted
-fn get_camo_accounts(client: &Client) -> Vec<(u32, CamoAccount)> {
+fn get_camo_accounts(client: &CoreClient) -> Vec<(u32, CamoAccount)> {
     let mut accounts: Vec<(u32, CamoAccount)> = client
         .wallet_db
         .camo_account_db
@@ -38,7 +38,7 @@ fn get_camo_accounts(client: &Client) -> Vec<(u32, CamoAccount)> {
     accounts
 }
 
-fn get_derived_accounts(client: &Client, account: &CamoAccount) -> Vec<Account> {
+fn get_derived_accounts(client: &CoreClient, account: &CamoAccount) -> Vec<Account> {
     client
         .wallet_db
         .derived_account_db
@@ -57,14 +57,15 @@ fn filter_receivable(receivables: &[&Receivable], account: &Account) -> Amount {
         .into()
 }
 
-fn print_balance(receivable: Amount, s: String) {
-    match receivable.value > 0 {
-        true => println!("{s} (+ {receivable} Nano receivable)",),
-        false => println!("{s}"),
+pub fn execute<Frontend: CliFrontend>(frontend: &Frontend) -> Result<(), ClientError> {
+    let cli_client = frontend.client();
+    fn print_balance<Frontend: CliFrontend>(receivable: Amount, s: String) {
+        match receivable.value > 0 {
+            true => Frontend::print(&format!("{s} (+ {receivable} Nano receivable)")),
+            false => Frontend::print(&s),
+        }
     }
-}
 
-pub fn execute(cli_client: &CliClient) -> Result<(), CliError> {
     let client = &cli_client.internal;
     let receivables: Vec<&Receivable> = cli_client.cached_receivable.values().collect();
 
@@ -75,13 +76,13 @@ pub fn execute(cli_client: &CliClient) -> Result<(), CliError> {
         .map(|receivable| receivable.amount)
         .sum::<u128>()
         .into();
-    print_balance(total_receivable, format!("total: {total} Nano"));
+    print_balance::<Frontend>(total_receivable, format!("total: {total} Nano"));
 
     // normal accounts
     for (index, account) in get_normal_accounts(client) {
         let balance = get_display_balance(client, &account);
         let account_receivable = filter_receivable(&receivables, &account);
-        print_balance(
+        print_balance::<Frontend>(
             account_receivable,
             format!("{account} (#{index}): {balance} Nano"),
         );
@@ -89,13 +90,13 @@ pub fn execute(cli_client: &CliClient) -> Result<(), CliError> {
 
     // camo accounts
     for (index, camo_account) in get_camo_accounts(client) {
-        println!("{camo_account} (#{index}):");
+        Frontend::print(&format!("{camo_account} (#{index}):"));
 
         // main account
         let main_account = camo_account.signer_account();
         let balance = get_display_balance(client, &main_account);
         let account_receivable = filter_receivable(&receivables, &main_account);
-        print_balance(
+        print_balance::<Frontend>(
             account_receivable,
             format!("\t{main_account} (main): {balance} Nano"),
         );
@@ -104,7 +105,7 @@ pub fn execute(cli_client: &CliClient) -> Result<(), CliError> {
         for account in get_derived_accounts(client, &camo_account) {
             let balance = get_display_balance(client, &account);
             let account_receivable = filter_receivable(&receivables, &account);
-            print_balance(account_receivable, format!("\t{account}: {balance} Nano"));
+            print_balance::<Frontend>(account_receivable, format!("\t{account}: {balance} Nano"));
         }
     }
     Ok(())

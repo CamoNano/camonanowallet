@@ -1,4 +1,4 @@
-use crate::error::ClientError;
+use crate::error::CoreClientError;
 use nanopyrs::rpc::RpcError;
 use std::fmt::Debug;
 
@@ -48,7 +48,7 @@ impl<T> From<(T, RpcFailures)> for RpcSuccess<T> {
     }
 }
 
-pub type RpcResult<T> = Result<RpcSuccess<T>, ClientError>;
+pub type RpcResult<T> = Result<RpcSuccess<T>, CoreClientError>;
 
 #[cfg(test)]
 mod tests {

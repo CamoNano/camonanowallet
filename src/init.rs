@@ -2,24 +2,27 @@ use super::error::CliError;
 use super::logging::{LevelFilter, Logger};
 use super::storage::{
     config_location, delete_wallet, get_wallet_names, init_files, load_wallet, save_config,
-    save_wallet, wallet_exists, ClientConfigConfy, StorageError,
+    save_wallet, wallet_exists,
 };
-use super::types::Hex32Bytes as Seed;
 use super::CliClient;
 use clap::{Args, Parser, Subcommand};
-use client::{nanopyrs, SecretBytes, WalletSeed};
+use client::{
+    core::{nanopyrs, SecretBytes, WalletSeed},
+    types::Hex32Bytes as Seed,
+    ClientConfig, ClientError,
+};
 use nanopyrs::hashes::blake2b256;
 use zeroize::Zeroize;
 
-pub fn prompt_password() -> Result<SecretBytes<32>, CliError> {
+pub fn prompt_password() -> Result<SecretBytes<32>, ClientError> {
     let mut password = rpassword::prompt_password("Enter password: ")
-        .map_err(|err| CliError::FailedToReadPassword(err.to_string()))?;
+        .map_err(|err| ClientError::FailedToReadPassword(err.to_string()))?;
     let key = blake2b256(password.as_bytes());
     password.zeroize();
     Ok(key)
 }
 
-pub fn prompt_checked_password() -> Result<SecretBytes<32>, CliError> {
+pub fn prompt_confirmed_password() -> Result<SecretBytes<32>, CliError> {
     let mut key = prompt_password()?;
     println!("Please confirm your password.");
     let mut key_2 = prompt_password()?;
@@ -84,17 +87,17 @@ struct NewArgs {
 impl NewArgs {
     fn execute(self) -> Result<Option<CliClient>, CliError> {
         if wallet_exists(&self.name)? {
-            return Err(CliError::StorageError(StorageError::WalletAlreadyExists));
+            return Err(CliError::WalletAlreadyExists);
         }
 
-        let key = prompt_checked_password()?;
+        let key = prompt_confirmed_password()?;
 
         let seed = WalletSeed::from(rand::random::<[u8; 32]>());
         println!("seed: {}", seed.as_hex());
 
-        let cli_client = CliClient::new(seed, self.name, key)?;
-        save_wallet(&cli_client, &cli_client.name, &cli_client.key)?;
-        Ok(Some(cli_client))
+        let client = CliClient::new(seed, self.name, key)?;
+        save_wallet(&client, &client.client.name, &client.client.key)?;
+        Ok(Some(client))
     }
 }
 
@@ -108,15 +111,15 @@ struct ImportArgs {
 impl ImportArgs {
     fn execute(self) -> Result<Option<CliClient>, CliError> {
         if wallet_exists(&self.name)? {
-            return Err(CliError::StorageError(StorageError::WalletAlreadyExists));
+            return Err(CliError::WalletAlreadyExists);
         }
 
-        let key = prompt_checked_password()?;
+        let key = prompt_confirmed_password()?;
         let seed = WalletSeed::from(self.seed.0);
 
-        let cli_client = CliClient::new(seed, self.name, key)?;
-        save_wallet(&cli_client, &cli_client.name, &cli_client.key)?;
-        Ok(Some(cli_client))
+        let client = CliClient::new(seed, self.name, key)?;
+        save_wallet(&client, &client.client.name, &client.client.key)?;
+        Ok(Some(client))
     }
 }
 
@@ -128,11 +131,11 @@ struct LoadArgs {
 impl LoadArgs {
     fn execute(self) -> Result<Option<CliClient>, CliError> {
         if !wallet_exists(&self.name)? {
-            return Err(CliError::StorageError(StorageError::WalletNotFound));
+            return Err(CliError::WalletNotFound);
         }
 
-        let cli_client = load_wallet(&self.name, prompt_password()?)?;
-        Ok(Some(cli_client))
+        let client = load_wallet(&self.name, prompt_password()?)?;
+        Ok(Some(client))
     }
 }
 
@@ -144,7 +147,7 @@ struct DeleteArgs {
 impl DeleteArgs {
     fn execute(self) -> Result<Option<CliClient>, CliError> {
         if !wallet_exists(&self.name)? {
-            return Err(CliError::StorageError(StorageError::WalletAlreadyExists));
+            return Err(CliError::WalletAlreadyExists);
         }
 
         delete_wallet(&self.name, &prompt_password()?)?;
@@ -176,7 +179,7 @@ struct ConfigArgs {
 impl ConfigArgs {
     fn execute(self) -> Result<Option<CliClient>, CliError> {
         if self.reset {
-            save_config(ClientConfigConfy::default())?
+            save_config(ClientConfig::default())?
         }
 
         println!("Path: {}", config_location()?);

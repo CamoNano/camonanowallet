@@ -1,5 +1,5 @@
-use super::{choose_representatives, Client};
-use crate::error::ClientError;
+use super::{choose_representatives, CoreClient};
+use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
 use crate::rpc::{RpcFailures, RpcResult};
 use futures::future;
@@ -31,14 +31,14 @@ pub struct CamoPayment {
 }
 
 pub(super) fn sender_ecdh(
-    client: &Client,
+    client: &CoreClient,
     recipient: &CamoAccount,
     sender_key: &Key,
-) -> Result<(SecretBytes<32>, Notification), ClientError> {
+) -> Result<(SecretBytes<32>, Notification), CoreClientError> {
     let frontier = client
         .frontiers_db
         .account_frontier(&sender_key.to_account())
-        .ok_or(ClientError::AccountNotFound)?
+        .ok_or(CoreClientError::AccountNotFound)?
         .block
         .hash();
     Ok(recipient.sender_ecdh(sender_key, frontier))
@@ -49,16 +49,16 @@ pub(super) fn sender_ecdh(
 /// Cached proof-of-work will be used, if there is any.
 /// Otherwise, the `work` field is left blank.
 fn create_send_block(
-    client: &Client,
+    client: &CoreClient,
     payment: Payment,
     sender_frontier: &FrontierInfo,
-) -> Result<Block, ClientError> {
+) -> Result<Block, CoreClientError> {
     let work = sender_frontier.cached_work().unwrap_or([0; 8]);
     let frontier = &sender_frontier.block;
 
     // sanity check balance
     if payment.amount > frontier.balance {
-        return Err(ClientError::NotEnoughCoins);
+        return Err(CoreClientError::NotEnoughCoins);
     }
 
     let previous = if sender_frontier.is_unopened() {
@@ -88,11 +88,11 @@ fn create_send_block(
 }
 
 /// Send to a `nano_` account.
-pub async fn send(client: &Client, payment: Payment) -> RpcResult<NewFrontiers> {
+pub async fn send(client: &CoreClient, payment: Payment) -> RpcResult<NewFrontiers> {
     let frontier = &client
         .frontiers_db
         .account_frontier(&payment.sender)
-        .ok_or(ClientError::AccountNotFound)?;
+        .ok_or(CoreClientError::AccountNotFound)?;
     let send_block = create_send_block(client, payment, frontier)?;
     let (info, rpc_failures) = client
         .rpc()
@@ -104,7 +104,7 @@ pub async fn send(client: &Client, payment: Payment) -> RpcResult<NewFrontiers> 
 
 /// publish both blocks: notification first, to minimize damage if an error occurs
 async fn camo_auto_publish_blocks(
-    client: &Client,
+    client: &CoreClient,
     notification_block: Block,
     send_block: Block,
 ) -> RpcResult<(FrontierInfo, FrontierInfo)> {
@@ -125,7 +125,7 @@ async fn camo_auto_publish_blocks(
 }
 
 /// Send to a `camo_` account, were the sender and notifier are identical
-async fn _send_camo_same(client: &Client, payment: CamoPayment) -> RpcResult<NewFrontiers> {
+async fn _send_camo_same(client: &CoreClient, payment: CamoPayment) -> RpcResult<NewFrontiers> {
     assert!(
         payment.sender == payment.notifier,
         "broken send_camo code: _send_camo_same used for non-identical sender and notifier"
@@ -134,11 +134,11 @@ async fn _send_camo_same(client: &Client, payment: CamoPayment) -> RpcResult<New
     let sender_frontier = &client
         .frontiers_db
         .account_frontier(&payment.sender)
-        .ok_or(ClientError::AccountNotFound)?;
+        .ok_or(CoreClientError::AccountNotFound)?;
     let sender_key = client
         .wallet_db
         .find_key(&client.seed, &payment.sender)
-        .ok_or(ClientError::AccountNotFound)?;
+        .ok_or(CoreClientError::AccountNotFound)?;
 
     let (shared_secret, notification) = sender_ecdh(client, &payment.recipient, &sender_key)?;
     let Notification::V1(notification) = &notification;
@@ -183,7 +183,7 @@ async fn _send_camo_same(client: &Client, payment: CamoPayment) -> RpcResult<New
 }
 
 /// Send to a `camo_` account.
-pub async fn send_camo(client: &Client, payment: CamoPayment) -> RpcResult<NewFrontiers> {
+pub async fn send_camo(client: &CoreClient, payment: CamoPayment) -> RpcResult<NewFrontiers> {
     let config = &client.config;
 
     if payment.notifier == payment.sender {
@@ -195,11 +195,11 @@ pub async fn send_camo(client: &Client, payment: CamoPayment) -> RpcResult<NewFr
     let sender_frontier = &client
         .frontiers_db
         .account_frontier(&payment.sender)
-        .ok_or(ClientError::AccountNotFound)?;
+        .ok_or(CoreClientError::AccountNotFound)?;
     let notifier_frontier = &client
         .frontiers_db
         .account_frontier(&payment.notifier)
-        .ok_or(ClientError::AccountNotFound)?;
+        .ok_or(CoreClientError::AccountNotFound)?;
 
     // ensure that we have work for both blocks
     let (notification_work, send_work) = future::try_join(
@@ -216,7 +216,7 @@ pub async fn send_camo(client: &Client, payment: CamoPayment) -> RpcResult<NewFr
     let sender_key = client
         .wallet_db
         .find_key(&client.seed, &payment.sender)
-        .ok_or(ClientError::AccountNotFound)?;
+        .ok_or(CoreClientError::AccountNotFound)?;
 
     let (shared_secret, notification) = sender_ecdh(client, &payment.recipient, &sender_key)?;
     let Notification::V1(notification) = &notification;

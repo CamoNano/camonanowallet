@@ -1,5 +1,5 @@
-use crate::config::ClientConfig;
-use crate::error::ClientError;
+use crate::config::CoreClientConfig;
+use crate::error::CoreClientError;
 use crate::rpc::get_ban_expiration;
 use log::debug;
 use nanopyrs::rpc::{debug::DebugRpc, RpcError};
@@ -57,7 +57,7 @@ impl Rpc {
         url: &str,
         proxy: impl Into<Option<String>>,
         banned_until: u64,
-    ) -> Result<Rpc, ClientError> {
+    ) -> Result<Rpc, CoreClientError> {
         Ok(Rpc {
             commands,
             rpc: DebugRpc::new(url, proxy)?,
@@ -69,7 +69,7 @@ impl Rpc {
         commands: RpcCommands,
         url: &str,
         proxy: impl Into<Option<String>>,
-    ) -> Result<Rpc, ClientError> {
+    ) -> Result<Rpc, CoreClientError> {
         Rpc::_new(commands, url, proxy, 0)
     }
 
@@ -93,7 +93,7 @@ impl Rpc {
         &self.rpc
     }
 
-    pub(super) fn handle_err(&mut self, config: &ClientConfig, err: &RpcError) {
+    pub(super) fn handle_err(&mut self, config: &CoreClientConfig, err: &RpcError) {
         let seconds = match err {
             RpcError::InvalidData => config.RPC_INVALID_DATA_BAN_TIME,
             _ => config.RPC_FAILURE_BAN_TIME,

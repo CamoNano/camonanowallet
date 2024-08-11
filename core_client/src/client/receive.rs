@@ -1,5 +1,5 @@
-use super::{choose_representatives, Client};
-use crate::error::ClientError;
+use super::{choose_representatives, CoreClient};
+use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
 use crate::rpc::{RpcFailures, RpcResult, RpcSuccess};
 use futures::future;
@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct ReceiveFailure {
-    pub err: ClientError,
+    pub err: CoreClientError,
     pub unreceived: Vec<Receivable>,
 }
 #[derive(Debug)]
@@ -25,11 +25,11 @@ pub struct ReceiveResult {
 /// Cached proof-of-work will be used, if there is any.
 /// Otherwise, the `work` field is left blank.
 fn create_receive_block(
-    client: &Client,
+    client: &CoreClient,
     receivable: &Receivable,
     recipient_frontier: &FrontierInfo,
     new_representative: Option<Account>,
-) -> Result<Block, ClientError> {
+) -> Result<Block, CoreClientError> {
     let account = &receivable.recipient;
     let work = recipient_frontier.cached_work().unwrap_or([0; 8]);
 
@@ -40,7 +40,7 @@ fn create_receive_block(
         .checked_add(receivable.amount)
         .is_none()
     {
-        return Err(ClientError::FrontierBalanceOverflow);
+        return Err(CoreClientError::FrontierBalanceOverflow);
     }
 
     let previous = if recipient_frontier.is_unopened() {
@@ -74,7 +74,7 @@ fn create_receive_block(
 ///
 /// **Does not handle camo payments.**
 pub async fn get_accounts_receivable(
-    client: &Client,
+    client: &CoreClient,
     accounts: &[Account],
 ) -> RpcResult<Vec<Receivable>> {
     if accounts.is_empty() {
@@ -96,11 +96,14 @@ pub async fn get_accounts_receivable(
 }
 
 /// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work.
-pub async fn receive_single(client: &Client, receivable: &Receivable) -> RpcResult<NewFrontiers> {
+pub async fn receive_single(
+    client: &CoreClient,
+    receivable: &Receivable,
+) -> RpcResult<NewFrontiers> {
     let frontier = &client
         .frontiers_db
         .account_frontier(&receivable.recipient)
-        .ok_or(ClientError::AccountNotFound)?;
+        .ok_or(CoreClientError::AccountNotFound)?;
     let receive_block = create_receive_block(client, receivable, frontier, None)?;
     let (info, rpc_failures) = client
         .rpc()
@@ -116,7 +119,7 @@ fn chunk_has_account(chunk: &[Receivable], account: &Account) -> bool {
 
 /// Chunks must not contain the same account multiple times,
 /// as it would cause the same frontier being referenced in multiple published blocks.
-fn chunks_receivable(client: &Client, receivables: Vec<Receivable>) -> Vec<Vec<Receivable>> {
+fn chunks_receivable(client: &CoreClient, receivables: Vec<Receivable>) -> Vec<Vec<Receivable>> {
     let mut chunks: Vec<Vec<Receivable>> = vec![];
     'outer: for receivable in receivables {
         for chunk in chunks.iter_mut() {
@@ -138,7 +141,7 @@ fn chunks_receivable(client: &Client, receivables: Vec<Receivable>) -> Vec<Vec<R
 ///
 /// This is intended to be used internally, where we cannot rely on the DB being synced.
 async fn receive_single_unsynced(
-    client: &Client,
+    client: &CoreClient,
     receivable: &Receivable,
     frontier: &FrontierInfo,
 ) -> RpcResult<FrontierInfo> {
@@ -152,7 +155,7 @@ async fn receive_single_unsynced(
 /// Receive transactions, returning the new frontiers of those accounts (the `receive` blocks), **with** cached work.
 ///
 /// Transactions are processed in batches of size `config::RPC_RECEIVE_TRANSACTIONS_BATCH_SIZE`.
-pub async fn receive(client: &Client, mut receivables: Vec<Receivable>) -> ReceiveResult {
+pub async fn receive(client: &CoreClient, mut receivables: Vec<Receivable>) -> ReceiveResult {
     // Instead of relying on the database,
     // which will become out-of-sync when an account receives more than one transaction,
     // we instead create a mini-database which will be updated and eventually returned by this method.
@@ -174,7 +177,7 @@ pub async fn receive(client: &Client, mut receivables: Vec<Receivable>) -> Recei
     receivables = _receivables;
 
     let mut rpc_failures = RpcFailures::default();
-    let mut err: Option<ClientError> = None;
+    let mut err: Option<CoreClientError> = None;
     // the hashes of transactions which were NOT successfully received
     let mut unreceived: Vec<Receivable> = vec![];
 

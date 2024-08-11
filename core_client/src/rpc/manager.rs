@@ -1,6 +1,6 @@
 use super::{get_current_time, wrapped::Rpc, RpcFailure, RpcFailures, RpcResult, RpcSuccess};
-use crate::config::ClientConfig;
-use crate::error::ClientError;
+use crate::config::CoreClientConfig;
+use crate::error::CoreClientError;
 use log::{trace, warn};
 use nanopyrs::rpc::{AccountInfo, BlockInfo, Receivable};
 use nanopyrs::{Account, Block};
@@ -12,7 +12,7 @@ macro_rules! wrap_rpc_methods {
     ( $($func:ident(&self, config: &ClientConfig, $($arg:ident: $type:ty),*) -> $return: ty)* ) => {
         $(
             #[doc = concat!("See `nanopyrs::rpc::Rpc::", stringify!($func), "()` for documentation")]
-            pub async fn $func(&self, config: &ClientConfig, $($arg: $type),*) -> $return {
+            pub async fn $func(&self, config: &CoreClientConfig, $($arg: $type),*) -> $return {
                 let command = stringify!($func);
                 for _ in 0..config.RPC_RETRY_LIMIT {
                     let mut failures = vec!();
@@ -43,7 +43,7 @@ macro_rules! wrap_rpc_methods {
                     warn!("Failed to execute RPC command '{command}'. Trying again...")
                 }
                 // unsuccessful request (all RPC's failed)
-                Err(ClientError::RpcCommandFailed)
+                Err(CoreClientError::RpcCommandFailed)
             }
         )*
     };
@@ -54,9 +54,9 @@ pub struct RpcManager();
 impl RpcManager {
     pub fn get_usable_rpcs(
         &self,
-        config: &ClientConfig,
+        config: &CoreClientConfig,
         command: &str,
-    ) -> Result<Vec<Rpc>, ClientError> {
+    ) -> Result<Vec<Rpc>, CoreClientError> {
         let current_time = get_current_time();
 
         let mut rpcs = config.RPCS.clone();
@@ -80,7 +80,7 @@ impl RpcManager {
         Ok(rpcs)
     }
 
-    pub fn handle_failures(&self, config: &mut ClientConfig, failures: RpcFailures) {
+    pub fn handle_failures(&self, config: &mut CoreClientConfig, failures: RpcFailures) {
         let _config = config.clone();
         for failure in failures.0 {
             config
@@ -111,7 +111,7 @@ impl RpcManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::ClientConfig;
+    use crate::config::CoreClientConfig;
     use crate::rpc::{get_current_time, Rpc, RpcCommands};
     use nanopyrs::rpc::RpcError;
 
@@ -150,13 +150,13 @@ mod tests {
         assert!(rpc_1.is_banned(get_current_time()));
 
         assert!(!rpc_2.is_banned(get_current_time()));
-        rpc_2.handle_err(&ClientConfig::test_default(), &RpcError::InvalidData);
+        rpc_2.handle_err(&CoreClientConfig::test_default(), &RpcError::InvalidData);
         assert!(rpc_2.is_banned(get_current_time()));
     }
 
     #[test]
     fn get_usable_rpcs_banned() {
-        let mut config = ClientConfig::test_default();
+        let mut config = CoreClientConfig::test_default();
         config.RPC_USE_BANNED_NODES_AS_BACKUP = true;
 
         let rpc_1 = fake_rpc("https://example3.com");
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn get_usable_rpcs_commands() {
-        let mut config = ClientConfig::test_default();
+        let mut config = CoreClientConfig::test_default();
         config.RPC_USE_BANNED_NODES_AS_BACKUP = true;
 
         let mut rpc_1 = fake_rpc("https://example5.com");

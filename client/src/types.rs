@@ -1,6 +1,6 @@
-use super::error::CliError;
-use client::constants::ONE_NANO;
-use client::{nanopyrs::NanoError, Account, CamoAccount, CamoVersion};
+use super::error::ClientError;
+use core_client::constants::ONE_NANO;
+use core_client::{nanopyrs::NanoError, Account, CamoAccount, CamoVersion};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
@@ -81,7 +81,7 @@ impl From<u128> for Amount {
     }
 }
 impl FromStr for Amount {
-    type Err = CliError;
+    type Err = ClientError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut amount: Vec<String> = s.split('.').map(|string| string.into()).collect();
@@ -91,16 +91,16 @@ impl FromStr for Amount {
 
         let amount_0 = amount[0]
             .parse::<u128>()
-            .map_err(|_| CliError::AmountBelowDustThreshold)?
+            .map_err(|_| ClientError::AmountBelowDustThreshold)?
             .checked_mul(ONE_NANO)
-            .ok_or(CliError::AmountBelowDustThreshold)?;
+            .ok_or(ClientError::AmountBelowDustThreshold)?;
         let amount_1 = format!("{:0<30}", amount[1])
             .parse::<u128>()
-            .map_err(|_| CliError::AmountBelowDustThreshold)?;
+            .map_err(|_| ClientError::AmountBelowDustThreshold)?;
 
         let value = amount_0
             .checked_add(amount_1)
-            .ok_or(CliError::AmountBelowDustThreshold)?;
+            .ok_or(ClientError::AmountBelowDustThreshold)?;
         Ok(Amount { value })
     }
 }
@@ -122,7 +122,7 @@ impl Display for Amount {
 #[cfg(test)]
 mod tests {
     use super::Amount;
-    use client::constants::*;
+    use core_client::constants::*;
 
     fn _amount_from_str(s: &str) -> u128 {
         s.parse::<Amount>().unwrap().value

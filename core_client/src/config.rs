@@ -8,7 +8,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 #[allow(non_snake_case)]
 #[serde_as]
 #[derive(Debug, Clone, Zeroize, ZeroizeOnDrop, Serialize, Deserialize)]
-pub struct ClientConfig {
+pub struct CoreClientConfig {
     /// Amount below which normal transactions will be ignored.
     /// Does not apply to camo payments.
     pub NORMAL_DUST_THRESHOLD: u128,
@@ -46,13 +46,13 @@ pub struct ClientConfig {
     /// RPCs to use for connecting to the Nano network
     pub RPCS: Vec<Rpc>,
 }
-impl ClientConfig {
+impl CoreClientConfig {
     pub fn default_with(reps: Vec<Account>, rpcs: Vec<Rpc>) -> Self {
         if reps.is_empty() {
             panic!("no representatives to choose from")
         }
 
-        ClientConfig {
+        CoreClientConfig {
             NORMAL_DUST_THRESHOLD: ONE_MICRO_NANO,
 
             DB_NUMBER_OF_ACCOUNTS_LIMIT: 20,
@@ -75,7 +75,7 @@ impl ClientConfig {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_default() -> ClientConfig {
-        ClientConfig::default_with(vec![nanopyrs::constants::get_genesis_account()], vec![])
+    pub(crate) fn test_default() -> CoreClientConfig {
+        CoreClientConfig::default_with(vec![nanopyrs::constants::get_genesis_account()], vec![])
     }
 }

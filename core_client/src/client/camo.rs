@@ -1,5 +1,5 @@
 use super::receive::get_accounts_receivable;
-use crate::client::Client;
+use crate::client::CoreClient;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
 use crate::rpc::{RpcResult, RpcSuccess};
 use crate::wallet::{DerivedAccountInfo, WalletDB, WalletSeed};
@@ -53,7 +53,7 @@ fn filter_worthless(
 }
 
 async fn download_notification_blocks(
-    client: &Client,
+    client: &CoreClient,
     hashes: &[[u8; 32]],
 ) -> RpcResult<Vec<Block>> {
     let (notification_blocks, rpc_failures) = client
@@ -72,7 +72,7 @@ async fn download_notification_blocks(
 
 /// Filters out non-notification receivable transactions
 async fn get_notification_blocks(
-    client: &Client,
+    client: &CoreClient,
     all_receivable: &[Receivable],
 ) -> RpcResult<Vec<Block>> {
     let hashes = all_receivable
@@ -150,7 +150,7 @@ fn get_camo_destinations_from_blocks(
 ///
 /// Note that the destination accounts are *not* scanned, only calculated.
 async fn download_historical_notifications(
-    client: &Client,
+    client: &CoreClient,
     account: &CamoAccount,
     head: Option<[u8; 32]>,
     offset: Option<usize>,
@@ -194,7 +194,7 @@ async fn download_historical_notifications(
 ///
 /// Note that the number of receivable payments per account that can be returned at one time is limited by `ACCOUNTS_RECEIVABLE_BATCH_SIZE`.
 pub async fn get_camo_receivable(
-    client: &Client,
+    client: &CoreClient,
     initial_receivable: &[Receivable],
 ) -> RpcResult<(Vec<Receivable>, Vec<DerivedAccountInfo>)> {
     if initial_receivable.is_empty() {
@@ -232,7 +232,7 @@ pub async fn get_camo_receivable(
 ///
 /// Note that the destination accounts are *not* scanned, only calculated.
 pub async fn rescan_notifications_partial(
-    client: &Client,
+    client: &CoreClient,
     account: &CamoAccount,
     head: Option<[u8; 32]>,
     offset: Option<usize>,

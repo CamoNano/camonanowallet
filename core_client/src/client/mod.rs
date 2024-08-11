@@ -2,8 +2,8 @@ mod camo;
 mod receive;
 mod send;
 
-use super::config::ClientConfig;
-use super::error::ClientError;
+use super::config::CoreClientConfig;
+use super::error::CoreClientError;
 use super::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
 use super::rpc::{ClientRpc, RpcFailures, RpcResult, RpcSuccess};
 use super::wallet::{DerivedAccountInfo, WalletDB, WalletSeed};
@@ -23,7 +23,7 @@ pub use camo::RescanData;
 pub use send::{CamoPayment, Payment};
 
 pub(crate) fn choose_representatives(
-    config: &ClientConfig,
+    config: &CoreClientConfig,
     current: Account,
     option: Option<Account>,
 ) -> Account {
@@ -41,16 +41,16 @@ pub(crate) fn choose_representatives(
 }
 
 #[derive(Debug, Clone, Zeroize)]
-pub struct Client {
+pub struct CoreClient {
     pub seed: WalletSeed,
-    pub config: ClientConfig,
+    pub config: CoreClientConfig,
 
     pub wallet_db: WalletDB,
     pub frontiers_db: FrontiersDB,
 }
-impl Client {
-    pub fn new(seed: WalletSeed, config: ClientConfig) -> Client {
-        Client {
+impl CoreClient {
+    pub fn new(seed: WalletSeed, config: CoreClientConfig) -> CoreClient {
+        CoreClient {
             seed,
             config,
             wallet_db: WalletDB::default(),
@@ -178,11 +178,11 @@ impl Client {
     pub fn camo_transaction_memo(
         &self,
         payment: &CamoPayment,
-    ) -> Result<(Account, Notification), ClientError> {
+    ) -> Result<(Account, Notification), CoreClientError> {
         let sender_key = self
             .wallet_db
             .find_key(&self.seed, &payment.sender)
-            .ok_or(ClientError::AccountNotFound)?;
+            .ok_or(CoreClientError::AccountNotFound)?;
         let (shared_secret, notification) = sender_ecdh(self, &payment.recipient, &sender_key)?;
         let derived = payment.recipient.derive_account(&shared_secret);
         Ok((derived, notification))
@@ -198,7 +198,7 @@ impl Client {
 
     /// Remove an account from the wallet and frontier DB's, and returns its frontier.
     /// This method works for both normal and derived Nano accounts.
-    pub fn remove_account(&mut self, account: &Account) -> Result<FrontierInfo, ClientError> {
+    pub fn remove_account(&mut self, account: &Account) -> Result<FrontierInfo, CoreClientError> {
         let account_db = self.wallet_db.account_db.remove(account).map(|_| ());
         let derived_db = self
             .wallet_db
@@ -215,7 +215,7 @@ impl Client {
     pub fn remove_camo_account(
         &mut self,
         account: &CamoAccount,
-    ) -> Result<FrontierInfo, ClientError> {
+    ) -> Result<FrontierInfo, CoreClientError> {
         let derived = self.get_derived_accounts_from_master(account);
         for account in derived {
             match self.wallet_db.derived_account_db.remove(&account) {

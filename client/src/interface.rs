@@ -1,12 +1,12 @@
 use super::balance;
-use super::error::CliError;
+use super::error::ClientError;
 use super::types::{Amount, CamoTxSummary};
 use super::types::{Hex32Bytes, ParsedAccount, ParsedCamoVersion};
-use super::CliClient;
+use super::CliFrontend;
 use clap::{Args, Parser, Subcommand};
-use client::{
+use core_client::{
     constants::CAMO_SENDER_DUST_THRESHOLD, Account, CamoAccount, CamoPayment, CamoVersion,
-    CamoVersions, ClientError, Notification, Payment, Receivable,
+    CamoVersions, CoreClientError, Notification, Payment, Receivable,
 };
 use std::cmp::{max, min};
 use tokio::runtime::Runtime;
@@ -21,31 +21,35 @@ pub struct Command {
 impl Command {
     // TODO: maybe allow commands to execute asynchronously to more quickly give control back to the user?
     /// `Ok(true)` means continue looping, `Ok(false)` means exit
-    pub fn execute(client: &mut CliClient, rt: &Runtime, command: &str) -> Result<bool, CliError> {
+    pub fn execute<Frontend: CliFrontend>(
+        frontend: &mut Frontend,
+        rt: &Runtime,
+        command: &str,
+    ) -> Result<bool, ClientError> {
         let command = command.split_whitespace();
         let command = match Command::try_parse_from(command) {
             Ok(command) => command,
             Err(err) => {
-                println!("{}", err);
+                Frontend::print(&err.to_string());
                 return Ok(true);
             }
         };
 
         rt.block_on(async {
             match command.command {
-                CommandType::Account(args) => args.execute(client).await,
-                CommandType::Balance(args) => args.execute(client),
-                CommandType::CamoHistory(args) => args.execute(client),
-                CommandType::Clear(args) => args.execute(),
-                CommandType::ClearCache(args) => args.execute(client).await,
-                CommandType::Notify(args) => args.execute(client).await,
-                CommandType::Receive(args) => args.execute(client).await,
-                CommandType::Refresh(args) => args.execute(client).await,
-                CommandType::Remove(args) => args.execute(client).await,
-                CommandType::Rescan(args) => args.execute(client).await,
-                CommandType::Seed(args) => args.execute(client),
-                CommandType::Send(args) => args.execute(client).await,
-                CommandType::SendCamo(args) => args.execute(client).await,
+                CommandType::Account(args) => args.execute(frontend).await,
+                CommandType::Balance(args) => args.execute(frontend),
+                CommandType::CamoHistory(args) => args.execute(frontend),
+                CommandType::Clear(args) => args.execute::<Frontend>(),
+                CommandType::ClearCache(args) => args.execute(frontend).await,
+                CommandType::Notify(args) => args.execute(frontend).await,
+                CommandType::Receive(args) => args.execute(frontend).await,
+                CommandType::Refresh(args) => args.execute(frontend).await,
+                CommandType::Remove(args) => args.execute(frontend).await,
+                CommandType::Rescan(args) => args.execute(frontend).await,
+                CommandType::Seed(args) => args.execute(frontend),
+                CommandType::Send(args) => args.execute(frontend).await,
+                CommandType::SendCamo(args) => args.execute(frontend).await,
                 CommandType::Quit(args) => args.execute(),
             }
         })
@@ -100,7 +104,11 @@ struct AccountArgs {
     versions: Option<Vec<ParsedCamoVersion>>,
 }
 impl AccountArgs {
-    async fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
+    async fn execute<Frontend: CliFrontend>(
+        self,
+        frontend: &mut Frontend,
+    ) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
         let client = &mut cli_client.internal;
 
         let string = if self.camo {
@@ -112,7 +120,7 @@ impl AccountArgs {
             let (key, info) = client
                 .seed
                 .get_camo_key(self.index, CamoVersions::new(&versions))
-                .ok_or(CliError::InvalidArguments)?;
+                .ok_or(ClientError::InvalidArguments)?;
             client
                 .wallet_db
                 .camo_account_db
@@ -120,8 +128,8 @@ impl AccountArgs {
             key.to_camo_account().to_string()
         } else {
             if self.versions.is_some() {
-                println!("The 'versions' option is only used for camo accounts");
-                return Err(CliError::InvalidArguments);
+                Frontend::print("The 'versions' option is only used for camo accounts");
+                return Err(ClientError::InvalidArguments);
             }
             let (key, info) = client.seed.get_key(self.index);
             client.wallet_db.account_db.insert(&client.config, info)?;
@@ -132,7 +140,7 @@ impl AccountArgs {
         let downloaded = client.handle_rpc_success(downloaded);
         client.set_new_frontiers(downloaded);
 
-        println!("{string}");
+        Frontend::print(&string);
         Ok(true)
     }
 }
@@ -140,8 +148,8 @@ impl AccountArgs {
 #[derive(Debug, Args)]
 struct BalanceArgs {}
 impl BalanceArgs {
-    fn execute(self, cli_client: &CliClient) -> Result<bool, CliError> {
-        balance::execute(cli_client)?;
+    fn execute<Frontend: CliFrontend>(self, frontend: &Frontend) -> Result<bool, ClientError> {
+        balance::execute(frontend)?;
         Ok(true)
     }
 }
@@ -156,7 +164,8 @@ struct CamoHistoryArgs {
     clear: bool,
 }
 impl CamoHistoryArgs {
-    fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
+    fn execute<Frontend: CliFrontend>(self, frontend: &mut Frontend) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
         if self.clear {
             cli_client.camo_history.clear();
             return Ok(true);
@@ -166,7 +175,7 @@ impl CamoHistoryArgs {
             if i == self.count {
                 break;
             }
-            println!("{}", payment);
+            Frontend::print(&payment.to_string());
         }
 
         Ok(true)
@@ -176,8 +185,8 @@ impl CamoHistoryArgs {
 #[derive(Debug, Args)]
 struct ClearArgs {}
 impl ClearArgs {
-    fn execute(self) -> Result<bool, CliError> {
-        print!("{}[2J", 27 as char);
+    fn execute<Frontend: CliFrontend>(self) -> Result<bool, ClientError> {
+        Frontend::clear_screen();
         Ok(true)
     }
 }
@@ -192,7 +201,11 @@ struct ClearCacheArgs {
     accounts: Vec<Account>,
 }
 impl ClearCacheArgs {
-    async fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
+    async fn execute<Frontend: CliFrontend>(
+        self,
+        frontend: &mut Frontend,
+    ) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
         let client = &mut cli_client.internal;
 
         let accounts = if !self.accounts.is_empty() {
@@ -200,8 +213,8 @@ impl ClearCacheArgs {
         } else if self.all {
             client.frontiers_db.all_accounts()
         } else {
-            println!("Please specify which work caches to clear");
-            return Err(CliError::InvalidArguments);
+            Frontend::print("Please specify which work caches to clear");
+            return Err(ClientError::InvalidArguments);
         };
 
         for account in accounts {
@@ -227,11 +240,15 @@ struct NotifyArgs {
     amount: Amount,
 }
 impl NotifyArgs {
-    async fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
+    async fn execute<Frontend: CliFrontend>(
+        self,
+        frontend: &mut Frontend,
+    ) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
         let client = &mut cli_client.internal;
 
         if self.amount.value < CAMO_SENDER_DUST_THRESHOLD {
-            return Err(CliError::AmountBelowDustThreshold);
+            return Err(ClientError::AmountBelowDustThreshold);
         }
 
         let payment = Payment {
@@ -240,18 +257,21 @@ impl NotifyArgs {
             recipient: self.recipient.signer_account(),
             new_representative: Some(Account::from_bytes(self.notification.0)?),
         };
-        println!("Sending...");
+        Frontend::print("Sending...");
         let success = client.send(payment).await?;
 
         let frontiers = client.handle_rpc_success(success);
         client.set_new_frontiers(frontiers);
-        println!("Done");
+        Frontend::print("Done");
         Ok(true)
     }
 }
 
 #[derive(Debug, Args)]
 struct ReceiveArgs {
+    /// List receivable transactions (default behavior)
+    #[arg(short, long)]
+    list: bool,
     /// The block hashes to receive
     #[arg(short, long, conflicts_with = "accounts")]
     blocks: Vec<Hex32Bytes>,
@@ -260,7 +280,11 @@ struct ReceiveArgs {
     accounts: Vec<Account>,
 }
 impl ReceiveArgs {
-    async fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
+    async fn execute<Frontend: CliFrontend>(
+        self,
+        frontend: &mut Frontend,
+    ) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
         let client = &mut cli_client.internal;
         let cached_receivable = &mut cli_client.cached_receivable;
 
@@ -269,7 +293,7 @@ impl ReceiveArgs {
                 .into_iter()
                 .map(|receivable| cached_receivable.remove(&receivable.0))
                 .collect::<Option<Vec<Receivable>>>()
-                .ok_or(ClientError::AccountNotFound)?
+                .ok_or(CoreClientError::AccountNotFound)?
         } else if !self.accounts.is_empty() {
             cached_receivable
                 .iter()
@@ -280,27 +304,29 @@ impl ReceiveArgs {
                 .into_iter()
                 .map(|receivable| cached_receivable.remove(&receivable))
                 .collect::<Option<Vec<Receivable>>>()
-                .ok_or(ClientError::AccountNotFound)?
+                .ok_or(CoreClientError::AccountNotFound)?
         } else {
             let mut receivables: Vec<&Receivable> = cached_receivable.values().collect();
             receivables.sort_by(|a, b| b.amount.cmp(&a.amount));
             if receivables.is_empty() {
-                println!("No transactions to receive.");
+                Frontend::print("No transactions to receive.");
             } else {
-                println!("Specify which transactions to receive by account (-a) or block (-b):");
+                Frontend::print(
+                    "Specify which transactions to receive by account (-a) or block (-b):",
+                );
             }
             for receivable in receivables {
-                println!(
+                Frontend::print(&format!(
                     "{}: {} ({} Nano)",
                     receivable.recipient,
                     hex::encode_upper(receivable.block_hash),
                     Amount::from(receivable.amount)
-                );
+                ));
             }
             return Ok(true);
         };
 
-        println!("Receiving...");
+        Frontend::print("Receiving...");
         let result = client.receive(receivables).await;
         let frontiers = client.handle_rpc_success(result.successes);
         client.set_new_frontiers(frontiers);
@@ -312,7 +338,7 @@ impl ReceiveArgs {
         };
 
         cli_client.insert_receivable(unreceived);
-        println!("Done");
+        Frontend::print("Done");
         return_value
     }
 }
@@ -320,8 +346,12 @@ impl ReceiveArgs {
 #[derive(Debug, Args)]
 struct RefreshArgs {}
 impl RefreshArgs {
-    async fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
-        println!("Downloading receivable transactions...");
+    async fn execute<Frontend: CliFrontend>(
+        self,
+        frontend: &mut Frontend,
+    ) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
+        Frontend::print("Downloading receivable transactions...");
         let client = &mut cli_client.internal;
         let accounts = client.wallet_db.all_nano_accounts();
         let receivables = client.download_receivable(&accounts).await?;
@@ -333,14 +363,14 @@ impl RefreshArgs {
         }
         cli_client.insert_receivable(receivables);
 
-        println!("Updating account frontiers...");
+        Frontend::print("Updating account frontiers...");
         let client = &mut cli_client.internal;
         let accounts = client.wallet_db.all_nano_accounts();
         let frontiers = client.download_frontiers(&accounts).await?;
         let frontiers = client.handle_rpc_success(frontiers);
         client.set_new_frontiers(frontiers);
 
-        println!("Done");
+        Frontend::print("Done");
         Ok(true)
     }
 }
@@ -351,14 +381,18 @@ struct RemoveArgs {
     account: ParsedAccount,
 }
 impl RemoveArgs {
-    async fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
+    async fn execute<Frontend: CliFrontend>(
+        self,
+        frontend: &mut Frontend,
+    ) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
         if let ParsedAccount::Nano(account) = self.account {
             cli_client.remove_account(&account)?;
         } else if let ParsedAccount::Camo(camo) = self.account {
             cli_client.remove_camo_account(&camo)?;
         } else {
-            println!("Please specify an account to remove");
-            return Err(CliError::InvalidArguments);
+            Frontend::print("Please specify an account to remove");
+            return Err(ClientError::InvalidArguments);
         }
         Ok(true)
     }
@@ -376,7 +410,11 @@ struct RescanArgs {
     no_filter: bool,
 }
 impl RescanArgs {
-    async fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
+    async fn execute<Frontend: CliFrontend>(
+        self,
+        frontend: &mut Frontend,
+    ) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
         let client = &mut cli_client.internal;
 
         let filter = !self.no_filter;
@@ -400,12 +438,12 @@ impl RescanArgs {
             let head_height = head_info.map(|info| info.height).unwrap_or(0);
 
             let bottom_height = head_height.saturating_sub(batch_size);
-            println!(
+            Frontend::print(&format!(
                 "Scanning {} blocks ({} -> {})...",
                 min(head_height, batch_size),
                 head_height,
                 bottom_height
-            );
+            ));
             let (rescan, rescan_rpc_failures) = client
                 .rescan_notifications_partial(&self.account, Some(head), None, filter)
                 .await?
@@ -414,15 +452,15 @@ impl RescanArgs {
 
             if let Some(head) = rescan.new_head {
                 if head != [0; 32] {
-                    println!("Ended on block: {}", hex::encode(head));
+                    Frontend::print(&format!("Ended on block: {}", hex::encode(head)));
                 }
             }
 
             cli_client.handle_rescan(rescan);
         } else {
-            println!("No blocks to scan. Maybe refresh?");
+            Frontend::print("No blocks to scan. Maybe refresh?");
         }
-        println!("Done");
+        Frontend::print("Done");
         Ok(true)
     }
 }
@@ -430,9 +468,9 @@ impl RescanArgs {
 #[derive(Debug, Args)]
 struct SeedArgs {}
 impl SeedArgs {
-    fn execute(self, cli_client: &CliClient) -> Result<bool, CliError> {
-        cli_client.authenticate()?;
-        println!("{}", cli_client.internal.seed.as_hex());
+    fn execute<Frontend: CliFrontend>(self, frontend: &Frontend) -> Result<bool, ClientError> {
+        frontend.authenticate()?;
+        Frontend::print(&frontend.client().internal.seed.as_hex().to_string());
         Ok(true)
     }
 }
@@ -450,7 +488,11 @@ struct SendArgs {
     representative: Option<Account>,
 }
 impl SendArgs {
-    async fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
+    async fn execute<Frontend: CliFrontend>(
+        self,
+        frontend: &mut Frontend,
+    ) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
         let client = &mut cli_client.internal;
 
         let payment = Payment {
@@ -459,12 +501,12 @@ impl SendArgs {
             recipient: self.recipient,
             new_representative: self.representative,
         };
-        println!("Sending...");
+        Frontend::print("Sending...");
         let success = client.send(payment).await?;
 
         let frontiers = client.handle_rpc_success(success);
         client.set_new_frontiers(frontiers);
-        println!("Done");
+        Frontend::print("Done");
         Ok(true)
     }
 }
@@ -488,7 +530,11 @@ struct SendCamoArgs {
     notifier_amount: Option<Amount>,
 }
 impl SendCamoArgs {
-    async fn execute(self, cli_client: &mut CliClient) -> Result<bool, CliError> {
+    async fn execute<Frontend: CliFrontend>(
+        self,
+        frontend: &mut Frontend,
+    ) -> Result<bool, ClientError> {
+        let cli_client = frontend.client_mut();
         let client = &mut cli_client.internal;
 
         let notifier_amount = if let Some(notifier_amount) = self.notifier_amount {
@@ -498,15 +544,15 @@ impl SendCamoArgs {
             // if a notifier account was NOT given (must be selected automatically)
             CAMO_SENDER_DUST_THRESHOLD
         } else {
-            println!("'notification_amount' is required if 'auto' is not set");
-            return Err(CliError::InvalidArguments);
+            Frontend::print("'notification_amount' is required if 'auto' is not set");
+            return Err(ClientError::InvalidArguments);
         };
 
         if notifier_amount < CAMO_SENDER_DUST_THRESHOLD {
-            return Err(CliError::AmountBelowDustThreshold);
+            return Err(ClientError::AmountBelowDustThreshold);
         }
         if self.amount.value < max(notifier_amount, CAMO_SENDER_DUST_THRESHOLD) {
-            return Err(CliError::AmountBelowDustThreshold);
+            return Err(ClientError::AmountBelowDustThreshold);
         }
 
         let notifier = if let Some(notifier) = self.notifier {
@@ -525,8 +571,8 @@ impl SendCamoArgs {
                 None => self.sender.clone(),
             }
         } else {
-            println!("'notifier' is required if 'auto' is not set");
-            return Err(CliError::InvalidArguments);
+            Frontend::print("'notifier' is required if 'auto' is not set");
+            return Err(ClientError::InvalidArguments);
         };
 
         let sender_amount = self.amount.value - notifier_amount;
@@ -551,12 +597,12 @@ impl SendCamoArgs {
             cli_client.camo_history.insert(0, tx_summary);
         }
 
-        println!("Sending...");
+        Frontend::print("Sending...");
         let success = client.send_camo(payment).await?;
 
         let frontiers = client.handle_rpc_success(success);
         client.set_new_frontiers(frontiers);
-        println!("Done");
+        Frontend::print("Done");
         Ok(true)
     }
 }
@@ -564,7 +610,7 @@ impl SendCamoArgs {
 #[derive(Debug, Args)]
 struct QuitArgs {}
 impl QuitArgs {
-    fn execute(self) -> Result<bool, CliError> {
+    fn execute(self) -> Result<bool, ClientError> {
         Ok(false)
     }
 }
