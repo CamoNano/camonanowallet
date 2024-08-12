@@ -7,7 +7,7 @@ use super::storage::{
 use super::CliClient;
 use clap::{Args, Parser, Subcommand};
 use client::{
-    core::{nanopyrs, SecretBytes, WalletSeed, rpc::workserver::WorkServer},
+    core::{nanopyrs, rpc::workserver::WorkServer, SecretBytes, WalletSeed},
     types::Hex32Bytes as Seed,
     ClientConfig, ClientError,
 };

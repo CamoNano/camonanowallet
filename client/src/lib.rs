@@ -9,8 +9,9 @@ pub mod storage;
 pub mod types;
 
 use core_client::{
+    rpc::workserver::{create_work_server, WorkClient, WorkServer},
     Account, CamoAccount, CoreClient, CoreClientConfig, Receivable, RescanData, SecretBytes,
-    WalletSeed, rpc::workserver::{WorkClient, WorkServer, create_work_server}
+    WalletSeed,
 };
 use defaults::{default_representatives, default_rpcs};
 use serde::{Deserialize, Serialize};
@@ -66,7 +67,7 @@ pub struct Client {
     pub cached_receivable: HashMap<[u8; 32], Receivable>,
     pub camo_history: Vec<CamoTxSummary>,
     #[zeroize(skip)]
-    pub work_client: WorkClient
+    pub work_client: WorkClient,
 }
 impl Client {
     pub fn new(
@@ -82,7 +83,7 @@ impl Client {
             internal: CoreClient::new(seed, config),
             cached_receivable: HashMap::new(),
             camo_history: vec![],
-            work_client
+            work_client,
         };
         Ok((client, work_server))
     }

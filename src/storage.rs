@@ -2,7 +2,10 @@ use super::error::CliError;
 use super::CliClient;
 use aes_gcm::Error as AESError;
 use client::{
-    core::{CoreClient, CoreClientConfig, SecretBytes, rpc::workserver::{create_work_server, WorkServer}},
+    core::{
+        rpc::workserver::{create_work_server, WorkServer},
+        CoreClient, CoreClientConfig, SecretBytes,
+    },
     storage::{EncryptedWallet, WalletData},
     Client, ClientConfig, ClientError,
 };
@@ -102,7 +105,7 @@ impl UserWallets {
             internal: client,
             cached_receivable: data.cached_receivable,
             camo_history: data.camo_history,
-            work_client
+            work_client,
         };
         Ok((CliClient { client }, work_server))
     }

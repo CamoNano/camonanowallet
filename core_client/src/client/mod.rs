@@ -2,12 +2,12 @@ mod camo;
 mod receive;
 mod send;
 
-use crate::rpc::workserver::WorkClient;
 use super::config::CoreClientConfig;
 use super::error::CoreClientError;
 use super::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
 use super::rpc::{ClientRpc, RpcFailures, RpcResult, RpcSuccess};
 use super::wallet::{DerivedAccountInfo, WalletDB, WalletSeed};
+use crate::rpc::workserver::WorkClient;
 use camo::{get_camo_receivable, rescan_notifications_partial};
 use log::error;
 use nanopyrs::{
@@ -149,18 +149,30 @@ impl CoreClient {
     }
 
     /// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work.
-    pub async fn receive_single(&self, work_client: &mut WorkClient, receivable: &Receivable) -> RpcResult<NewFrontiers> {
+    pub async fn receive_single(
+        &self,
+        work_client: &mut WorkClient,
+        receivable: &Receivable,
+    ) -> RpcResult<NewFrontiers> {
         receive_single(self, work_client, receivable).await
     }
 
     /// Send to a `nano_` account.
-    pub async fn send(&self, work_client: &mut WorkClient, payment: Payment) -> RpcResult<NewFrontiers> {
+    pub async fn send(
+        &self,
+        work_client: &mut WorkClient,
+        payment: Payment,
+    ) -> RpcResult<NewFrontiers> {
         send(self, work_client, payment).await
     }
 
     /// Send to a `camo_` account.
     /// The notifier and sender accounts most be different for privacy reasons.
-    pub async fn send_camo(&self, work_client: &mut WorkClient, payment: CamoPayment) -> RpcResult<NewFrontiers> {
+    pub async fn send_camo(
+        &self,
+        work_client: &mut WorkClient,
+        payment: CamoPayment,
+    ) -> RpcResult<NewFrontiers> {
         send_camo(self, work_client, payment).await
     }
 

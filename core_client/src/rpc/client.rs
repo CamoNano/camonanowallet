@@ -2,10 +2,10 @@ use super::RpcManager;
 use crate::config::CoreClientConfig;
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
-use crate::rpc::{RpcFailures, RpcResult, RpcSuccess, workserver::WorkClient};
+use crate::rpc::{workserver::WorkClient, RpcFailures, RpcResult, RpcSuccess};
+use log::warn;
 use nanopyrs::{Account, Block};
 use std::iter::zip;
-use log::warn;
 
 #[derive(Debug)]
 pub struct ClientRpc();
@@ -21,7 +21,10 @@ impl ClientRpc {
             return Ok((work, RpcFailures::default()).into());
         }
 
-        if work_client.request_work(config, frontier.work_hash()).is_ok() {
+        if work_client
+            .request_work(config, frontier.work_hash())
+            .is_ok()
+        {
             work_client.wait_on(frontier.work_hash()).await.rpc_result
         } else {
             // Contingency plan
@@ -151,7 +154,8 @@ impl ClientRpc {
         if config.ENABLE_WORK_CACHE {
             work_client.request_work(config, block.hash())?;
         }
-        self.get_work_and_publish_unsynced(config, work_client, frontier, block).await
+        self.get_work_and_publish_unsynced(config, work_client, frontier, block)
+            .await
     }
 
     /// Get work for a block, and publish it to the network.
@@ -166,7 +170,8 @@ impl ClientRpc {
         let frontier = frontiers_db
             .account_frontier(&block.account)
             .ok_or(CoreClientError::AccountNotFound)?;
-        self.auto_publish_unsynced(config, work_client, frontier, block).await
+        self.auto_publish_unsynced(config, work_client, frontier, block)
+            .await
     }
 
     /// Handle the given RPC failures, adjusting future RPC selections as necessary

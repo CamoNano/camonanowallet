@@ -7,7 +7,7 @@ mod storage;
 
 use clap::Parser;
 use client::{
-    core::{SecretBytes, WalletSeed, rpc::workserver::WorkServer},
+    core::{rpc::workserver::WorkServer, SecretBytes, WalletSeed},
     CliFrontend, Client, ClientError, Command,
 };
 use error::CliError;
@@ -19,14 +19,16 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(Debug, Zeroize, ZeroizeOnDrop)]
 struct CliClient {
-    client: Client
+    client: Client,
 }
 impl CliClient {
-    fn new(seed: WalletSeed, name: String, key: SecretBytes<32>) -> Result<(CliClient, WorkServer), CliError> {
+    fn new(
+        seed: WalletSeed,
+        name: String,
+        key: SecretBytes<32>,
+    ) -> Result<(CliClient, WorkServer), CliError> {
         let (client, work_server) = Client::new(seed, name, key, load_config()?)?;
-        Ok((CliClient{
-            client
-        }, work_server))
+        Ok((CliClient { client }, work_server))
     }
 
     fn save_to_disk(&mut self) -> Result<(), CliError> {

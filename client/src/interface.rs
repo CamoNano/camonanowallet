@@ -5,8 +5,8 @@ use super::types::{Hex32Bytes, ParsedAccount, ParsedCamoVersion};
 use super::CliFrontend;
 use clap::{Args, Parser, Subcommand};
 use core_client::{
-    constants::CAMO_SENDER_DUST_THRESHOLD, Account, CamoAccount, Receivable, CamoPayment, CamoVersion,
-    CamoVersions, CoreClientError, Notification, Payment, rpc::RpcManager
+    constants::CAMO_SENDER_DUST_THRESHOLD, rpc::RpcManager, Account, CamoAccount, CamoPayment,
+    CamoVersion, CamoVersions, CoreClientError, Notification, Payment, Receivable,
 };
 use std::cmp::{max, min};
 
@@ -289,7 +289,10 @@ impl ReceiveArgs {
         let client = &mut cli_client.internal;
 
         if let Some(block) = &self.block {
-            let receivables = cli_client.cached_receivable.remove(&block.0).ok_or(CoreClientError::AccountNotFound)?;
+            let receivables = cli_client
+                .cached_receivable
+                .remove(&block.0)
+                .ok_or(CoreClientError::AccountNotFound)?;
             Frontend::print("Receiving...");
             let result = client.receive_single(work_client, &receivables).await?;
             let frontiers = client.handle_rpc_success(result);
@@ -302,7 +305,7 @@ impl ReceiveArgs {
             if receivables.is_empty() {
                 println!("No transactions to receive.");
             } else {
-                println!("Specify which transactions to receive by account (-a) or block (-b):");
+                println!("Specify which transaction to receive by block (-b):");
             }
             for receivable in receivables {
                 println!(
@@ -405,9 +408,7 @@ impl RescanArgs {
         if let Some(head) = head {
             let batch_size = client.config.RPC_ACCOUNT_HISTORY_BATCH_SIZE;
 
-            let head_info_success = RpcManager()
-                .block_info(&client.config, head)
-                .await?;
+            let head_info_success = RpcManager().block_info(&client.config, head).await?;
             let (head_info, mut rpc_failures) = head_info_success.into();
             let head_height = head_info.map(|info| info.height).unwrap_or(0);
 

@@ -1,6 +1,6 @@
+use crate::rpc::workserver::WorkServerDisconnected;
 use nanopyrs::{rpc::RpcError, NanoError};
 use thiserror::Error;
-use crate::rpc::workserver::WorkServerDisconnected;
 
 #[derive(Debug, Error)]
 pub enum CoreClientError {

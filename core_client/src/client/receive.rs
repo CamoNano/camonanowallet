@@ -1,21 +1,8 @@
 use super::{choose_representatives, CoreClient};
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
-use crate::rpc::{RpcResult, RpcSuccess, RpcManager, ClientRpc, workserver::WorkClient};
+use crate::rpc::{workserver::WorkClient, ClientRpc, RpcManager, RpcResult, RpcSuccess};
 use nanopyrs::{rpc::Receivable, Account, Block, BlockType, Signature};
-
-#[derive(Debug)]
-pub struct ReceiveFailure {
-    pub err: CoreClientError,
-    pub unreceived: Vec<Receivable>,
-}
-#[derive(Debug)]
-pub struct ReceiveResult {
-    /// updated frontiers of accounts with successfully-received transactions
-    pub successes: RpcSuccess<NewFrontiers>,
-    /// transactions which could not be received, and an error that caused it
-    pub failures: Result<(), ReceiveFailure>,
-}
 
 /// Create a signed `receive` block for the given pending transaction.
 ///
