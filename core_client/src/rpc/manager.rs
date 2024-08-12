@@ -5,7 +5,6 @@ use log::{trace, warn};
 use nanopyrs::rpc::{AccountInfo, BlockInfo, Receivable};
 use nanopyrs::{Account, Block};
 use rand::prelude::{thread_rng, SliceRandom};
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 macro_rules! wrap_rpc_methods {
@@ -17,8 +16,10 @@ macro_rules! wrap_rpc_methods {
                 for _ in 0..config.RPC_RETRY_LIMIT {
                     let mut failures = vec!();
                     for w_rpc in self.get_usable_rpcs(config, command)? {
-                        let response = w_rpc.rpc.$func($($arg),*).await;
                         let url = w_rpc.get_url();
+                        trace!("Making RPC request ({}) to {}", command, url);
+
+                        let response = w_rpc.rpc.$func($($arg),*).await;
 
                         trace!("RPC request ({}) to {}: {:?}", command, url, response.raw_request);
                         trace!("RPC response ({}) from {}: {:?}", command, url, response.raw_response);
@@ -49,7 +50,7 @@ macro_rules! wrap_rpc_methods {
     };
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct RpcManager();
 impl RpcManager {
     pub fn get_usable_rpcs(

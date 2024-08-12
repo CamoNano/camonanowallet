@@ -2,6 +2,7 @@ mod camo;
 mod receive;
 mod send;
 
+use crate::rpc::workserver::WorkClient;
 use super::config::CoreClientConfig;
 use super::error::CoreClientError;
 use super::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
@@ -15,7 +16,7 @@ use nanopyrs::{
     Account,
 };
 use rand::seq::SliceRandom;
-use receive::{get_accounts_receivable, receive, receive_single, ReceiveResult};
+use receive::{get_accounts_receivable, receive_single};
 use send::{send, send_camo, sender_ecdh};
 use zeroize::Zeroize;
 
@@ -40,7 +41,7 @@ pub(crate) fn choose_representatives(
         .clone()
 }
 
-#[derive(Debug, Clone, Zeroize)]
+#[derive(Debug, Zeroize)]
 pub struct CoreClient {
     pub seed: WalletSeed,
     pub config: CoreClientConfig,
@@ -56,10 +57,6 @@ impl CoreClient {
             wallet_db: WalletDB::default(),
             frontiers_db: FrontiersDB::default(),
         }
-    }
-
-    pub fn rpc(&self) -> ClientRpc {
-        ClientRpc()
     }
 
     /// Returns the frontiers of all `nano_` accounts in the wallet with `balance >= amount`,
@@ -99,7 +96,7 @@ impl CoreClient {
 
     /// Download the frontiers of the given accounts.
     pub async fn download_frontiers(&self, accounts: &[Account]) -> RpcResult<NewFrontiers> {
-        self.rpc()
+        ClientRpc()
             .download_frontiers(&self.config, &self.frontiers_db, accounts)
             .await
     }
@@ -152,26 +149,19 @@ impl CoreClient {
     }
 
     /// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work.
-    pub async fn receive_single(&self, receivable: &Receivable) -> RpcResult<NewFrontiers> {
-        receive_single(self, receivable).await
-    }
-
-    /// Receive transactions, returning the new frontiers of those accounts (the `receive` blocks), **with** cached work.
-    ///
-    /// Transactions are processed in batches of size `config::RPC_RECEIVE_TRANSACTIONS_BATCH_SIZE`.
-    pub async fn receive(&self, receivables: Vec<Receivable>) -> ReceiveResult {
-        receive(self, receivables).await
+    pub async fn receive_single(&self, work_client: &mut WorkClient, receivable: &Receivable) -> RpcResult<NewFrontiers> {
+        receive_single(self, work_client, receivable).await
     }
 
     /// Send to a `nano_` account.
-    pub async fn send(&self, payment: Payment) -> RpcResult<NewFrontiers> {
-        send(self, payment).await
+    pub async fn send(&self, work_client: &mut WorkClient, payment: Payment) -> RpcResult<NewFrontiers> {
+        send(self, work_client, payment).await
     }
 
     /// Send to a `camo_` account.
     /// The notifier and sender accounts most be different for privacy reasons.
-    pub async fn send_camo(&self, payment: CamoPayment) -> RpcResult<NewFrontiers> {
-        send_camo(self, payment).await
+    pub async fn send_camo(&self, work_client: &mut WorkClient, payment: CamoPayment) -> RpcResult<NewFrontiers> {
+        send_camo(self, work_client, payment).await
     }
 
     /// Returns `(derived_account, notification)`
@@ -238,7 +228,7 @@ impl CoreClient {
 
     /// Handle the given RPC failures, adjusting future RPC selections as necessary
     pub fn handle_rpc_failures(&mut self, failures: RpcFailures) {
-        self.rpc().handle_failures(&mut self.config, failures)
+        ClientRpc().handle_failures(&mut self.config, failures)
     }
 
     /// Handle the given RPC failures, adjusting future RPC selections as necessary

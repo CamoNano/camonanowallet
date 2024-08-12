@@ -7,7 +7,7 @@ mod storage;
 
 use clap::Parser;
 use client::{
-    core::{SecretBytes, WalletSeed},
+    core::{SecretBytes, WalletSeed, rpc::workserver::WorkServer},
     CliFrontend, Client, ClientError, Command,
 };
 use error::CliError;
@@ -19,12 +19,14 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(Debug, Zeroize, ZeroizeOnDrop)]
 struct CliClient {
-    client: Client,
+    client: Client
 }
 impl CliClient {
-    fn new(seed: WalletSeed, name: String, key: SecretBytes<32>) -> Result<CliClient, CliError> {
-        let client = Client::new(seed, name, key, load_config()?)?;
-        Ok(client.into())
+    fn new(seed: WalletSeed, name: String, key: SecretBytes<32>) -> Result<(CliClient, WorkServer), CliError> {
+        let (client, work_server) = Client::new(seed, name, key, load_config()?)?;
+        Ok((CliClient{
+            client
+        }, work_server))
     }
 
     fn save_to_disk(&mut self) -> Result<(), CliError> {
@@ -32,9 +34,7 @@ impl CliClient {
         save_wallet_overriding(self, &self.client.name, &self.client.key)
     }
 
-    fn start_cli(&mut self) {
-        let rt = Runtime::new().expect("could not create Tokio runtime");
-
+    async fn _start_cli(&mut self) {
         loop {
             print!("> ");
             stdout().flush().expect("failed to flush stdout");
@@ -42,7 +42,7 @@ impl CliClient {
             let mut input = String::new();
             stdin().read_line(&mut input).expect("failed to read stdin");
 
-            let result = Command::execute(self, &rt, &input);
+            let result = Command::execute(self, &input).await;
             self.save_to_disk().expect("failed to save wallet to disk");
 
             match result {
@@ -51,6 +51,15 @@ impl CliClient {
                 Err(err) => println!("{:?}", err),
             }
         }
+    }
+
+    fn start(&mut self, work_server: WorkServer) {
+        let rt = Runtime::new().expect("could not create Tokio runtime");
+        rt.spawn(async move {
+            let _ = work_server.start().await;
+        });
+        // drop(work_server);
+        rt.block_on(self._start_cli());
     }
 }
 impl CliFrontend for CliClient {
@@ -78,11 +87,6 @@ impl CliFrontend for CliClient {
         &mut self.client
     }
 }
-impl From<Client> for CliClient {
-    fn from(value: Client) -> Self {
-        CliClient { client: value }
-    }
-}
 
 fn main() {
     let init = Init::parse().execute();
@@ -94,8 +98,8 @@ fn main() {
         }
     };
 
-    let mut client = match client {
-        Some(client) => client,
+    let (mut client, work_server) = match client {
+        Some((client, work_server)) => (client, work_server),
         None => return,
     };
 
@@ -104,5 +108,5 @@ fn main() {
         Err(err) => println!("Failed to start logging: {err}"),
     }
 
-    client.start_cli();
+    client.start(work_server);
 }

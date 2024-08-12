@@ -2,7 +2,7 @@ use super::error::CliError;
 use super::CliClient;
 use aes_gcm::Error as AESError;
 use client::{
-    core::{CoreClient, CoreClientConfig, SecretBytes},
+    core::{CoreClient, CoreClientConfig, SecretBytes, rpc::workserver::{create_work_server, WorkServer}},
     storage::{EncryptedWallet, WalletData},
     Client, ClientConfig, ClientError,
 };
@@ -40,7 +40,7 @@ impl UserWallets {
         key: &SecretBytes<32>,
     ) -> Result<(), CliError> {
         let cli_client = &client.client;
-        let client = cli_client.internal.clone();
+        let client = &cli_client.internal;
 
         if !is_valid_name(name) {
             return Err(CliError::InvalidWalletName);
@@ -50,9 +50,9 @@ impl UserWallets {
         }
 
         let data = WalletData {
-            seed: client.seed,
-            wallet_db: client.wallet_db,
-            frontiers_db: client.frontiers_db,
+            seed: client.seed.clone(),
+            wallet_db: client.wallet_db.clone(),
+            frontiers_db: client.frontiers_db.clone(),
             cached_receivable: cli_client.cached_receivable.clone(),
             camo_history: cli_client.camo_history.clone(),
         };
@@ -78,7 +78,7 @@ impl UserWallets {
         config: CoreClientConfig,
         name: &str,
         key: SecretBytes<32>,
-    ) -> Result<CliClient, CliError> {
+    ) -> Result<(CliClient, WorkServer), CliError> {
         if !self.wallet_exists(name) {
             return Err(CliError::WalletNotFound);
         }
@@ -90,18 +90,21 @@ impl UserWallets {
             .decrypt(&key)?;
         let client = CoreClient {
             seed: data.seed,
-            config,
+            config: config.clone(),
             wallet_db: data.wallet_db,
             frontiers_db: data.frontiers_db,
         };
-        Ok(Client {
+
+        let (work_client, work_server) = create_work_server(config);
+        let client = Client {
             name: name.into(),
             key,
             internal: client,
             cached_receivable: data.cached_receivable,
             camo_history: data.camo_history,
-        }
-        .into())
+            work_client
+        };
+        Ok((CliClient { client }, work_server))
     }
 
     fn delete_wallet(&mut self, name: &str, key: &SecretBytes<32>) -> Result<(), CliError> {
@@ -179,7 +182,7 @@ pub fn save_wallet(
 }
 
 /// Load the wallet file from disk
-pub fn load_wallet(name: &str, key: SecretBytes<32>) -> Result<CliClient, CliError> {
+pub fn load_wallet(name: &str, key: SecretBytes<32>) -> Result<(CliClient, WorkServer), CliError> {
     let config = load_config()?;
     let wallets = UserWallets::load_from_disk()?;
     wallets.load_wallet(config, name, key)

@@ -10,7 +10,7 @@ pub mod types;
 
 use core_client::{
     Account, CamoAccount, CoreClient, CoreClientConfig, Receivable, RescanData, SecretBytes,
-    WalletSeed,
+    WalletSeed, rpc::workserver::{WorkClient, WorkServer, create_work_server}
 };
 use defaults::{default_representatives, default_rpcs};
 use serde::{Deserialize, Serialize};
@@ -65,6 +65,8 @@ pub struct Client {
     #[zeroize(skip)]
     pub cached_receivable: HashMap<[u8; 32], Receivable>,
     pub camo_history: Vec<CamoTxSummary>,
+    #[zeroize(skip)]
+    pub work_client: WorkClient
 }
 impl Client {
     pub fn new(
@@ -72,14 +74,17 @@ impl Client {
         name: String,
         key: SecretBytes<32>,
         config: CoreClientConfig,
-    ) -> Result<Client, ClientError> {
-        Ok(Client {
+    ) -> Result<(Client, WorkServer), ClientError> {
+        let (work_client, work_server) = create_work_server(config.clone());
+        let client = Client {
             name,
             key,
             internal: CoreClient::new(seed, config),
             cached_receivable: HashMap::new(),
             camo_history: vec![],
-        })
+            work_client
+        };
+        Ok((client, work_server))
     }
 
     /// Remove this account's receivable transactions from the DB

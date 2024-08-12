@@ -1,8 +1,7 @@
 use super::{choose_representatives, CoreClient};
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
-use crate::rpc::{RpcFailures, RpcResult};
-use futures::future;
+use crate::rpc::{RpcFailures, RpcResult, ClientRpc, workserver::WorkClient};
 use log::info;
 use nanopyrs::{
     camo::{CamoAccount, Notification},
@@ -88,15 +87,14 @@ fn create_send_block(
 }
 
 /// Send to a `nano_` account.
-pub async fn send(client: &CoreClient, payment: Payment) -> RpcResult<NewFrontiers> {
+pub async fn send(client: &CoreClient, work_client: &mut WorkClient, payment: Payment) -> RpcResult<NewFrontiers> {
     let frontier = &client
         .frontiers_db
         .account_frontier(&payment.sender)
         .ok_or(CoreClientError::AccountNotFound)?;
     let send_block = create_send_block(client, payment, frontier)?;
-    let (info, rpc_failures) = client
-        .rpc()
-        .auto_publish_unsynced(&client.config, frontier, send_block)
+    let (info, rpc_failures) = ClientRpc()
+        .auto_publish_unsynced(&client.config, work_client, frontier, send_block)
         .await?
         .into();
     Ok((vec![info].into(), rpc_failures).into())
@@ -109,13 +107,11 @@ async fn camo_auto_publish_blocks(
     send_block: Block,
 ) -> RpcResult<(FrontierInfo, FrontierInfo)> {
     let mut rpc_failures = RpcFailures::default();
-    let (notification_frontier, notification_failures) = client
-        .rpc()
+    let (notification_frontier, notification_failures) = ClientRpc()
         .publish(&client.config, notification_block)
         .await?
         .into();
-    let (send_frontier, send_failures) = client
-        .rpc()
+    let (send_frontier, send_failures) = ClientRpc()
         .publish(&client.config, send_block)
         .await?
         .into();
@@ -125,7 +121,7 @@ async fn camo_auto_publish_blocks(
 }
 
 /// Send to a `camo_` account, were the sender and notifier are identical
-async fn _send_camo_same(client: &CoreClient, payment: CamoPayment) -> RpcResult<NewFrontiers> {
+async fn _send_camo_same(client: &CoreClient, work_client: &mut WorkClient, payment: CamoPayment) -> RpcResult<NewFrontiers> {
     assert!(
         payment.sender == payment.notifier,
         "broken send_camo code: _send_camo_same used for non-identical sender and notifier"
@@ -155,9 +151,8 @@ async fn _send_camo_same(client: &CoreClient, payment: CamoPayment) -> RpcResult
         },
         sender_frontier,
     )?;
-    let (sender_frontier, mut rpc_failures) = client
-        .rpc()
-        .auto_publish_unsynced(&client.config, sender_frontier, send_block)
+    let (sender_frontier, mut rpc_failures) = ClientRpc()
+        .auto_publish_unsynced(&client.config, work_client, sender_frontier, send_block)
         .await?
         .into();
 
@@ -172,9 +167,8 @@ async fn _send_camo_same(client: &CoreClient, payment: CamoPayment) -> RpcResult
         },
         &sender_frontier,
     )?;
-    let (sender_frontier, rpc_failures_2) = client
-        .rpc()
-        .auto_publish_unsynced(&client.config, &sender_frontier, notification_block)
+    let (sender_frontier, rpc_failures_2) = ClientRpc()
+        .auto_publish_unsynced(&client.config, work_client, &sender_frontier, notification_block)
         .await?
         .into();
     rpc_failures.merge_with(rpc_failures_2);
@@ -183,11 +177,11 @@ async fn _send_camo_same(client: &CoreClient, payment: CamoPayment) -> RpcResult
 }
 
 /// Send to a `camo_` account.
-pub async fn send_camo(client: &CoreClient, payment: CamoPayment) -> RpcResult<NewFrontiers> {
+pub async fn send_camo(client: &CoreClient, work_client: &mut WorkClient, payment: CamoPayment) -> RpcResult<NewFrontiers> {
     let config = &client.config;
 
     if payment.notifier == payment.sender {
-        return _send_camo_same(client, payment).await;
+        return _send_camo_same(client, work_client, payment).await;
     }
 
     let mut rpc_failures = RpcFailures::default();
@@ -202,11 +196,8 @@ pub async fn send_camo(client: &CoreClient, payment: CamoPayment) -> RpcResult<N
         .ok_or(CoreClientError::AccountNotFound)?;
 
     // ensure that we have work for both blocks
-    let (notification_work, send_work) = future::try_join(
-        client.rpc().get_work(config, notifier_frontier),
-        client.rpc().get_work(config, sender_frontier),
-    )
-    .await?;
+    let notification_work = ClientRpc().get_work(config, work_client, notifier_frontier).await?;
+    let send_work = ClientRpc().get_work(config, work_client, sender_frontier).await?;
     let (notification_work, work_failures_1) = notification_work.into();
     let (send_work, work_failures_2) = send_work.into();
     rpc_failures.merge_with(work_failures_1);
@@ -248,41 +239,19 @@ pub async fn send_camo(client: &CoreClient, payment: CamoPayment) -> RpcResult<N
     )?;
     notification_block.work = notification_work;
 
-    let internal_rpc = client.rpc().internal();
     // cache work for future transactions
-    let frontiers: NewFrontiers = match config.ENABLE_WORK_CACHE {
-        true => {
-            let future = future::try_join3(
-                internal_rpc.work_generate(config, notification_block.hash(), None),
-                internal_rpc.work_generate(config, send_block.hash(), None),
-                camo_auto_publish_blocks(client, notification_block, send_block),
-            );
-            let (notifier_work, sender_work, publish_success) = future.await?;
+    if config.ENABLE_WORK_CACHE {
+        work_client.request_work(config, notification_block.hash())?;
+        work_client.request_work(config, send_block.hash())?;
+    }
 
-            let (notifier_work, work_result_1) = notifier_work.into();
-            let (sender_work, work_result_2) = sender_work.into();
-            rpc_failures.merge_with(work_result_1);
-            rpc_failures.merge_with(work_result_2);
+    let publish_success =
+        camo_auto_publish_blocks(client, notification_block, send_block).await?;
 
-            let ((mut notification_frontier, mut send_frontier), publish_failures) =
-                publish_success.into();
-            rpc_failures.merge_with(publish_failures);
+    let ((notification_frontier, send_frontier), publish_failures) = publish_success.into();
+    rpc_failures.merge_with(publish_failures);
 
-            notification_frontier.set_work(config, notifier_work);
-            send_frontier.set_work(config, sender_work);
-
-            vec![notification_frontier, send_frontier].into()
-        }
-        false => {
-            let publish_success =
-                camo_auto_publish_blocks(client, notification_block, send_block).await?;
-
-            let ((notification_frontier, send_frontier), publish_failures) = publish_success.into();
-            rpc_failures.merge_with(publish_failures);
-
-            vec![notification_frontier, send_frontier].into()
-        }
-    };
+    let frontiers = vec![notification_frontier, send_frontier].into();
 
     Ok((frontiers, rpc_failures).into())
 }

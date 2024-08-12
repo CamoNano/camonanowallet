@@ -5,11 +5,10 @@ use super::types::{Hex32Bytes, ParsedAccount, ParsedCamoVersion};
 use super::CliFrontend;
 use clap::{Args, Parser, Subcommand};
 use core_client::{
-    constants::CAMO_SENDER_DUST_THRESHOLD, Account, CamoAccount, CamoPayment, CamoVersion,
-    CamoVersions, CoreClientError, Notification, Payment, Receivable,
+    constants::CAMO_SENDER_DUST_THRESHOLD, Account, CamoAccount, Receivable, CamoPayment, CamoVersion,
+    CamoVersions, CoreClientError, Notification, Payment, rpc::RpcManager
 };
 use std::cmp::{max, min};
-use tokio::runtime::Runtime;
 
 #[derive(Debug, Parser)]
 #[command(no_binary_name = true, arg_required_else_help = true)]
@@ -19,11 +18,9 @@ pub struct Command {
     command: CommandType,
 }
 impl Command {
-    // TODO: maybe allow commands to execute asynchronously to more quickly give control back to the user?
     /// `Ok(true)` means continue looping, `Ok(false)` means exit
-    pub fn execute<Frontend: CliFrontend>(
+    pub async fn execute<Frontend: CliFrontend>(
         frontend: &mut Frontend,
-        rt: &Runtime,
         command: &str,
     ) -> Result<bool, ClientError> {
         let command = command.split_whitespace();
@@ -35,24 +32,22 @@ impl Command {
             }
         };
 
-        rt.block_on(async {
-            match command.command {
-                CommandType::Account(args) => args.execute(frontend).await,
-                CommandType::Balance(args) => args.execute(frontend),
-                CommandType::CamoHistory(args) => args.execute(frontend),
-                CommandType::Clear(args) => args.execute::<Frontend>(),
-                CommandType::ClearCache(args) => args.execute(frontend).await,
-                CommandType::Notify(args) => args.execute(frontend).await,
-                CommandType::Receive(args) => args.execute(frontend).await,
-                CommandType::Refresh(args) => args.execute(frontend).await,
-                CommandType::Remove(args) => args.execute(frontend).await,
-                CommandType::Rescan(args) => args.execute(frontend).await,
-                CommandType::Seed(args) => args.execute(frontend),
-                CommandType::Send(args) => args.execute(frontend).await,
-                CommandType::SendCamo(args) => args.execute(frontend).await,
-                CommandType::Quit(args) => args.execute(),
-            }
-        })
+        match command.command {
+            CommandType::Account(args) => args.execute(frontend).await,
+            CommandType::Balance(args) => args.execute(frontend),
+            CommandType::CamoHistory(args) => args.execute(frontend),
+            CommandType::Clear(args) => args.execute::<Frontend>(),
+            CommandType::ClearCache(args) => args.execute(frontend).await,
+            CommandType::Notify(args) => args.execute(frontend).await,
+            CommandType::Receive(args) => args.execute(frontend).await,
+            CommandType::Refresh(args) => args.execute(frontend).await,
+            CommandType::Remove(args) => args.execute(frontend).await,
+            CommandType::Rescan(args) => args.execute(frontend).await,
+            CommandType::Seed(args) => args.execute(frontend),
+            CommandType::Send(args) => args.execute(frontend).await,
+            CommandType::SendCamo(args) => args.execute(frontend).await,
+            CommandType::Quit(args) => args.execute(),
+        }
     }
 }
 
@@ -245,6 +240,7 @@ impl NotifyArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let cli_client = frontend.client_mut();
+        let work_client = &mut cli_client.work_client;
         let client = &mut cli_client.internal;
 
         if self.amount.value < CAMO_SENDER_DUST_THRESHOLD {
@@ -258,7 +254,7 @@ impl NotifyArgs {
             new_representative: Some(Account::from_bytes(self.notification.0)?),
         };
         Frontend::print("Sending...");
-        let success = client.send(payment).await?;
+        let success = client.send(work_client, payment).await?;
 
         let frontiers = client.handle_rpc_success(success);
         client.set_new_frontiers(frontiers);
@@ -272,12 +268,16 @@ struct ReceiveArgs {
     /// List receivable transactions (default behavior)
     #[arg(short, long)]
     list: bool,
-    /// The block hashes to receive
+    /// The block hash to receive
     #[arg(short, long, conflicts_with = "accounts")]
-    blocks: Vec<Hex32Bytes>,
-    /// The accounts to receive transactions on
-    #[arg(short, long, conflicts_with = "blocks")]
-    accounts: Vec<Account>,
+    block: Option<Hex32Bytes>,
+    // TODO: re-enable
+    // /// The block hashes to receive
+    // #[arg(short, long, conflicts_with = "accounts")]
+    // blocks: Vec<Hex32Bytes>,
+    // /// The accounts to receive transactions on
+    // #[arg(short, long, conflicts_with = "blocks")]
+    // accounts: Vec<Account>,
 }
 impl ReceiveArgs {
     async fn execute<Frontend: CliFrontend>(
@@ -285,61 +285,37 @@ impl ReceiveArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let cli_client = frontend.client_mut();
+        let work_client = &mut cli_client.work_client;
         let client = &mut cli_client.internal;
-        let cached_receivable = &mut cli_client.cached_receivable;
 
-        let receivables: Vec<Receivable> = if !self.blocks.is_empty() {
-            self.blocks
-                .into_iter()
-                .map(|receivable| cached_receivable.remove(&receivable.0))
-                .collect::<Option<Vec<Receivable>>>()
-                .ok_or(CoreClientError::AccountNotFound)?
-        } else if !self.accounts.is_empty() {
-            cached_receivable
-                .iter()
-                .filter(|receivable| self.accounts.contains(&receivable.1.recipient))
-                .map(|receivable| receivable.0)
-                .cloned()
-                .collect::<Vec<_>>()
-                .into_iter()
-                .map(|receivable| cached_receivable.remove(&receivable))
-                .collect::<Option<Vec<Receivable>>>()
-                .ok_or(CoreClientError::AccountNotFound)?
+        if let Some(block) = &self.block {
+            let receivables = cli_client.cached_receivable.remove(&block.0).ok_or(CoreClientError::AccountNotFound)?;
+            Frontend::print("Receiving...");
+            let result = client.receive_single(work_client, &receivables).await?;
+            let frontiers = client.handle_rpc_success(result);
+            client.set_new_frontiers(frontiers);
+
+            Frontend::print("Done");
         } else {
-            let mut receivables: Vec<&Receivable> = cached_receivable.values().collect();
+            let mut receivables: Vec<&Receivable> = cli_client.cached_receivable.values().collect();
             receivables.sort_by(|a, b| b.amount.cmp(&a.amount));
             if receivables.is_empty() {
-                Frontend::print("No transactions to receive.");
+                println!("No transactions to receive.");
             } else {
-                Frontend::print(
-                    "Specify which transactions to receive by account (-a) or block (-b):",
-                );
+                println!("Specify which transactions to receive by account (-a) or block (-b):");
             }
             for receivable in receivables {
-                Frontend::print(&format!(
+                println!(
                     "{}: {} ({} Nano)",
                     receivable.recipient,
                     hex::encode_upper(receivable.block_hash),
                     Amount::from(receivable.amount)
-                ));
+                );
             }
             return Ok(true);
-        };
+        }
 
-        Frontend::print("Receiving...");
-        let result = client.receive(receivables).await;
-        let frontiers = client.handle_rpc_success(result.successes);
-        client.set_new_frontiers(frontiers);
-
-        let (return_value, unreceived) = if let Err(err) = result.failures {
-            (Err(err.err.into()), err.unreceived)
-        } else {
-            (Ok(true), vec![])
-        };
-
-        cli_client.insert_receivable(unreceived);
-        Frontend::print("Done");
-        return_value
+        Ok(true)
     }
 }
 
@@ -429,9 +405,7 @@ impl RescanArgs {
         if let Some(head) = head {
             let batch_size = client.config.RPC_ACCOUNT_HISTORY_BATCH_SIZE;
 
-            let head_info_success = client
-                .rpc()
-                .internal()
+            let head_info_success = RpcManager()
                 .block_info(&client.config, head)
                 .await?;
             let (head_info, mut rpc_failures) = head_info_success.into();
@@ -493,6 +467,7 @@ impl SendArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let cli_client = frontend.client_mut();
+        let work_client = &mut cli_client.work_client;
         let client = &mut cli_client.internal;
 
         let payment = Payment {
@@ -502,7 +477,7 @@ impl SendArgs {
             new_representative: self.representative,
         };
         Frontend::print("Sending...");
-        let success = client.send(payment).await?;
+        let success = client.send(work_client, payment).await?;
 
         let frontiers = client.handle_rpc_success(success);
         client.set_new_frontiers(frontiers);
@@ -535,6 +510,7 @@ impl SendCamoArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let cli_client = frontend.client_mut();
+        let work_client = &mut cli_client.work_client;
         let client = &mut cli_client.internal;
 
         let notifier_amount = if let Some(notifier_amount) = self.notifier_amount {
@@ -598,7 +574,7 @@ impl SendCamoArgs {
         }
 
         Frontend::print("Sending...");
-        let success = client.send_camo(payment).await?;
+        let success = client.send_camo(work_client, payment).await?;
 
         let frontiers = client.handle_rpc_success(success);
         client.set_new_frontiers(frontiers);

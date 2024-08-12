@@ -1,7 +1,7 @@
 use super::receive::get_accounts_receivable;
 use crate::client::CoreClient;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
-use crate::rpc::{RpcResult, RpcSuccess};
+use crate::rpc::{RpcResult, RpcSuccess, RpcManager};
 use crate::wallet::{DerivedAccountInfo, WalletDB, WalletSeed};
 use futures::future;
 use log::{debug, error};
@@ -56,9 +56,7 @@ async fn download_notification_blocks(
     client: &CoreClient,
     hashes: &[[u8; 32]],
 ) -> RpcResult<Vec<Block>> {
-    let (notification_blocks, rpc_failures) = client
-        .rpc()
-        .internal()
+    let (notification_blocks, rpc_failures) = RpcManager()
         .blocks_info(&client.config, hashes)
         .await?
         .into();
@@ -156,9 +154,7 @@ async fn download_historical_notifications(
     offset: Option<usize>,
 ) -> RpcResult<(Vec<DerivedAccountInfo>, Option<[u8; 32]>)> {
     // TODO: maybe cache account histories to avoid re-downloading?
-    let (history, mut rpc_failures) = client
-        .rpc()
-        .internal()
+    let (history, mut rpc_failures) = RpcManager()
         .account_history(
             &client.config,
             &account.signer_account(),
