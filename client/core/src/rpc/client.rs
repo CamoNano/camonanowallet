@@ -10,7 +10,7 @@ use std::iter::zip;
 pub struct ClientRpc();
 impl ClientRpc {
     /// Get cached work for this frontier, either cached locally or from an RPC
-    pub async fn get_work(
+    pub fn get_work(
         &self,
         config: &CoreClientConfig,
         work_client: &mut WorkManager,
@@ -20,9 +20,9 @@ impl ClientRpc {
             return Ok((work, RpcFailures::default()).into());
         }
 
-        let work_hash = frontier.cache_work_hash();
+        let work_hash = frontier.work_hash();
         work_client.request_work(config, work_hash);
-        work_client.wait_on(work_hash).await.rpc_result
+        work_client.wait_on(work_hash).rpc_result
     }
 
     /// Publish a block to the network
@@ -106,7 +106,7 @@ impl ClientRpc {
     ) -> RpcResult<FrontierInfo> {
         let mut failures = RpcFailures::default();
 
-        let (work, failures_work) = self.get_work(config, work_client, frontier).await?.into();
+        let (work, failures_work) = self.get_work(config, work_client, frontier)?.into();
         block.work = work;
         failures.merge_with(failures_work);
 

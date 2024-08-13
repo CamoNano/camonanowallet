@@ -43,9 +43,9 @@ impl From<ClientConfig> for CoreClientConfig {
     }
 }
 
-pub trait CliFrontend {
+pub trait WalletFrontend {
     /// Print a string
-    fn print(s: &str);
+    fn println(s: &str);
     /// Clear the terminal
     fn clear_screen();
     /// Authenticate the user: if the password is incorrect, returns an error.
@@ -128,10 +128,25 @@ impl Client {
         self.insert_receivable(rescan.receivable);
     }
 
-    pub async fn update_work_cache(&mut self) -> Result<(), ClientError> {
-        Ok(self
+    /// Update the work cache.
+    /// Returns `Ok(true)` if we should save the wallet data.
+    ///
+    /// Saves finished requests and makes new ones (if neccessary).
+    pub async fn update_work_cache(&mut self) -> Result<bool, ClientError> {
+        // Handle finished requests
+        let should_save = self
             .internal
             .handle_work_results(&mut self.work_client)
-            .await?)
+            .await?;
+
+        // Make new requests
+        for work_hash in self.internal.frontiers_db.needs_work() {
+            if self.work_client.n_requests() >= 2 {
+                break;
+            }
+            self.work_client
+                .request_work(&self.internal.config, work_hash);
+        }
+        Ok(should_save)
     }
 }

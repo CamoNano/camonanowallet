@@ -1,10 +1,11 @@
 use crate::rpc::{RpcManager, RpcResult};
 use crate::CoreClientConfig;
-use log::debug;
+use log::{debug, info};
 use std::collections::HashMap;
+use std::thread::sleep;
 use std::time::{Duration, SystemTime};
-use tokio::task::{spawn, JoinHandle};
-use tokio::time::sleep;
+use tokio::runtime::Handle as TokioHandle;
+use tokio::task::{block_in_place, spawn, JoinHandle};
 
 const TEN_MILLIS: Duration = Duration::from_millis(10);
 
@@ -15,8 +16,8 @@ pub struct WorkResult {
 }
 pub type WorkHandle = JoinHandle<WorkResult>;
 
-async fn resolve_handle(handle: WorkHandle, work_hash: [u8; 32]) -> WorkResult {
-    match handle.await {
+fn resolve_handle(handle: WorkHandle, work_hash: [u8; 32]) -> WorkResult {
+    match block_in_place(|| TokioHandle::current().block_on(handle)) {
         Ok(result) => result,
         Err(err) => WorkResult {
             work_hash,
@@ -55,7 +56,7 @@ impl WorkManager {
     /// Wait for a work request to resolve.
     ///
     /// Panics if work has not been requested for this hash.
-    pub async fn wait_on(&mut self, work_hash: [u8; 32]) -> WorkResult {
+    pub fn wait_on(&mut self, work_hash: [u8; 32]) -> WorkResult {
         let time = SystemTime::now();
         let mut last_log_time = 0;
 
@@ -66,22 +67,23 @@ impl WorkManager {
 
         loop {
             if handle.is_finished() {
-                return resolve_handle(handle, work_hash).await;
+                return resolve_handle(handle, work_hash);
             }
 
             if let Ok(elapsed) = time.elapsed() {
                 if elapsed.as_secs() > last_log_time {
-                    log::debug!(
-                        "WorkManager::wait_on(): waiting on work for {}",
+                    info!(
+                        "Waiting on work for hash {}...",
                         hex::encode(work_hash).to_uppercase()
                     );
                     last_log_time += 1;
                 }
             }
-            sleep(TEN_MILLIS).await;
+            sleep(TEN_MILLIS);
         }
     }
 
+    /// Return all finished requests.
     pub async fn get_results(&mut self) -> Vec<WorkResult> {
         let mut to_remove = vec![];
         for (work_hash, handle) in self.handles.iter() {
@@ -95,8 +97,13 @@ impl WorkManager {
                 .handles
                 .remove(&work_hash)
                 .expect("broken WorkManager::get_results() code: failed to remove handle");
-            removed.push(resolve_handle(handle, work_hash).await)
+            removed.push(resolve_handle(handle, work_hash))
         }
         removed
+    }
+
+    /// Returns how many requests are currently running.
+    pub fn n_requests(&self) -> usize {
+        self.handles.len()
     }
 }

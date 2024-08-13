@@ -9,6 +9,10 @@ macro_rules! search {
         $vec.iter().position(|item| &item.block.hash() == &$value)
     }};
 
+    ($vec: expr, WorkHash, $value: expr) => {{
+        $vec.iter().position(|item| &item.work_hash() == &$value)
+    }};
+
     ($vec: expr, Account, $value: expr) => {{
         $vec.iter().position(|item| &item.block.account == $value)
     }};
@@ -84,10 +88,10 @@ impl FrontierInfo {
     }
 
     pub fn is_unopened(&self) -> bool {
-        FrontierInfo::new_unopened(self.block.account.clone()) == *self
+        FrontierInfo::new_unopened(self.block.account.clone()).block == self.block
     }
 
-    pub fn cache_work_hash(&self) -> [u8; 32] {
+    pub fn work_hash(&self) -> [u8; 32] {
         if self.is_unopened() {
             self.block.account.compressed.to_bytes()
         } else {
@@ -103,7 +107,7 @@ impl FrontierInfo {
         self.cached_work = Some(work);
         if !self.has_valid_work(config) {
             let account = &self.block.account;
-            let work_hash = hex::encode_upper(self.cache_work_hash());
+            let work_hash = hex::encode_upper(self.work_hash());
             let work = hex::encode(work);
             error!(
                 "Attempted to cache invalid work for {account} with work hash {work_hash}: {work}"
@@ -118,11 +122,7 @@ impl FrontierInfo {
 
     pub fn has_valid_work(&mut self, config: &CoreClientConfig) -> bool {
         if let Some(work) = self.cached_work {
-            check_work(
-                self.cache_work_hash(),
-                config.WORK_DIFFICULTY.to_be_bytes(),
-                work,
-            )
+            check_work(self.work_hash(), config.WORK_DIFFICULTY.to_be_bytes(), work)
         } else {
             false
         }
@@ -150,15 +150,15 @@ pub struct FrontiersDB {
     frontiers_balance: u128,
 }
 impl FrontiersDB {
-    /// Returns `None` if the block could not be found
+    /// Returns `None` if the frontier could not be found
     fn get_hash(&self, hash: [u8; 32]) -> Option<&FrontierInfo> {
         let index = search!(self.frontiers, Hash, hash)?;
         Some(&self.frontiers[index])
     }
 
-    /// Returns `None` if the block could not be found
-    fn get_hash_mut(&mut self, hash: [u8; 32]) -> Option<&mut FrontierInfo> {
-        let index = search!(self.frontiers, Hash, hash)?;
+    /// Returns `None` if the frontier could not be found
+    fn get_work_hash_mut(&mut self, hash: [u8; 32]) -> Option<&mut FrontierInfo> {
+        let index = search!(self.frontiers, WorkHash, hash)?;
         Some(&mut self.frontiers[index])
     }
 
@@ -358,12 +358,21 @@ impl FrontiersDB {
         work_hash: [u8; 32],
         work: [u8; 8],
     ) -> Result<(), CoreClientError> {
-        if let Some(info) = self.get_hash_mut(work_hash) {
+        if let Some(info) = self.get_work_hash_mut(work_hash) {
             info.cache_work(config, work);
             Ok(())
         } else {
             Err(CoreClientError::AccountNotFound)
         }
+    }
+
+    /// Return work hashes which do not have cached work.
+    pub fn needs_work(&self) -> Vec<[u8; 32]> {
+        self.frontiers
+            .iter()
+            .filter(|frontier| frontier.cached_work.is_none())
+            .map(|frontier| frontier.work_hash())
+            .collect()
     }
 
     /// Remove any frontiers which are known to the database.

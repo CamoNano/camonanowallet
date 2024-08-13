@@ -8,17 +8,23 @@ mod storage;
 use clap::Parser;
 use client::{
     core::{SecretBytes, WalletSeed},
-    CliFrontend, Client, ClientError, Command,
+    Client, ClientError, Command, WalletFrontend,
 };
 use error::CliError;
 use init::{prompt_password, Init};
+use log::debug;
 use std::io::{stdin, stdout, Write};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use storage::{load_config, save_config, save_wallet_overriding};
 use tokio::runtime::Runtime;
 use tokio::task;
 use zeroize::{Zeroize, ZeroizeOnDrop};
+
+/// The wallet will only ever save to disk this often in the work cache loop.
+/// Note that this does not mean that we will *always* save this often:
+/// This is just a speed limit.
+const SAVE_TIMER: Duration = Duration::from_millis(2000);
 
 #[derive(Debug, Zeroize, ZeroizeOnDrop)]
 struct CliClient {
@@ -31,16 +37,32 @@ impl CliClient {
     }
 
     fn save_to_disk(&mut self) -> Result<(), CliError> {
+        debug!("Saving wallet to disk");
         save_config(self.client.internal.config.clone().into())?;
         save_wallet_overriding(self, &self.client.name, &self.client.key)
     }
 
     async fn work_cache_loop(mut self, stop: Receiver<()>) -> Result<CliClient, CliError> {
+        // Try not to spam the disk:
+        // Save at most once per 2 seconds.
+        let mut last_save = Instant::now();
+        let mut should_save = false;
+
         loop {
             let message = stop.recv_timeout(Duration::from_millis(10));
+            // No stop signal (timeout)
             if let Err(RecvTimeoutError::Timeout) = message {
-                self.client.update_work_cache().await?;
-            } else {
+                // Save to disk if cache has been updated
+                should_save |= self.client.update_work_cache().await?;
+
+                if should_save && last_save.elapsed() >= SAVE_TIMER {
+                    self.save_to_disk()?;
+                    last_save = Instant::now();
+                    should_save = false;
+                }
+            }
+            // Yes stop signal
+            else {
                 break;
             }
         }
@@ -71,7 +93,7 @@ impl CliClient {
             match result {
                 Ok(true) => (),
                 Ok(false) => break,
-                Err(err) => println!("{:?}", err),
+                Err(err) => println!("{err:?}: {err}"),
             }
         }
     }
@@ -81,8 +103,8 @@ impl CliClient {
         rt.block_on(self._start_cli());
     }
 }
-impl CliFrontend for CliClient {
-    fn print(s: &str) {
+impl WalletFrontend for CliClient {
+    fn println(s: &str) {
         println!("{s}");
     }
 

@@ -1,6 +1,6 @@
 use super::error::ClientError;
 use super::types::Amount;
-use super::CliFrontend;
+use super::WalletFrontend;
 use core_client::{Account, CamoAccount, CoreClient, Receivable};
 
 fn get_display_balance(client: &CoreClient, account: &Account) -> String {
@@ -57,12 +57,12 @@ fn filter_receivable(receivables: &[&Receivable], account: &Account) -> Amount {
         .into()
 }
 
-pub fn execute<Frontend: CliFrontend>(frontend: &Frontend) -> Result<(), ClientError> {
+pub fn execute<Frontend: WalletFrontend>(frontend: &Frontend) -> Result<(), ClientError> {
     let cli_client = frontend.client();
-    fn print_balance<Frontend: CliFrontend>(receivable: Amount, s: String) {
+    fn print_balance<Frontend: WalletFrontend>(receivable: Amount, s: String) {
         match receivable.value > 0 {
-            true => Frontend::print(&format!("{s} (+ {receivable} Nano receivable)")),
-            false => Frontend::print(&s),
+            true => Frontend::println(&format!("{s} (+ {receivable} Nano receivable)")),
+            false => Frontend::println(&s),
         }
     }
 
@@ -90,7 +90,7 @@ pub fn execute<Frontend: CliFrontend>(frontend: &Frontend) -> Result<(), ClientE
 
     // camo accounts
     for (index, camo_account) in get_camo_accounts(client) {
-        Frontend::print(&format!("{camo_account} (#{index}):"));
+        Frontend::println(&format!("{camo_account} (#{index}):"));
 
         // main account
         let main_account = camo_account.signer_account();

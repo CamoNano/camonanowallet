@@ -65,7 +65,7 @@ impl CoreClientConfig {
             DB_NUMBER_OF_ACCOUNTS_LIMIT: 20,
 
             RPC_INVALID_DATA_BAN_TIME: ONE_HOUR * 12,
-            RPC_FAILURE_BAN_TIME: ONE_MINUTE * 15,
+            RPC_FAILURE_BAN_TIME: ONE_MINUTE * 20,
             RPC_USE_BANNED_NODES_AS_BACKUP: true,
             RPC_RETRY_LIMIT: 8,
             WORK_DIFFICULTY: 0xfffffff800000000,

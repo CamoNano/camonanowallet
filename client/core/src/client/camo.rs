@@ -123,7 +123,7 @@ fn get_camo_destinations_from_blocks(
             Some(info) => info,
             None => {
                 // Non-notification blocks should have been filtered earlier
-                error!("Attempted to scan invalid notification block {block_hash}: {recipient} not in DB");
+                error!("Attempted to scan invalid notification block: {recipient} not in DB");
                 continue;
             }
         };

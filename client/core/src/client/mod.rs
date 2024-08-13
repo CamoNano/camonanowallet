@@ -15,7 +15,7 @@ use nanopyrs::{
     Account,
 };
 use rand::seq::SliceRandom;
-use receive::{get_accounts_receivable, receive_single};
+use receive::{get_accounts_receivable, receive, receive_block, ReceiveResult};
 use send::{send, send_camo, sender_ecdh};
 use zeroize::Zeroize;
 
@@ -147,13 +147,26 @@ impl CoreClient {
         rescan_notifications_partial(self, account, head, offset, filter).await
     }
 
-    /// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work.
-    pub async fn receive_single(
+    /// Receive a single transaction, returning the new frontier of that account (a `receive` block).
+    /// **Does** cache work for the next block, if enabled.
+    pub async fn receive_block(
         &self,
         work_client: &mut WorkManager,
         receivable: &Receivable,
     ) -> RpcResult<NewFrontiers> {
-        receive_single(self, work_client, receivable).await
+        receive_block(self, work_client, receivable).await
+    }
+
+    /// Receive a single transaction, returning the new frontier of that account (a `receive` block).
+    /// **Does** cache work for the next block, if enabled.
+    ///
+    /// This is intended to be used internally, where we cannot rely on the DB being synced.
+    pub async fn receive(
+        &self,
+        work_client: &mut WorkManager,
+        receivables: Vec<Receivable>,
+    ) -> ReceiveResult {
+        receive(self, work_client, receivables).await
     }
 
     /// Send to a `nano_` account.
@@ -249,14 +262,18 @@ impl CoreClient {
     }
 
     /// Handle the given work results, adjusting future RPC selections as necessary.
+    /// Returns `Ok(true)` if we should save the wallet data.
     /// Can only return `Err` if something went wrong with `FrontiersDB`.
     ///
     /// Should be run regularly.
     pub async fn handle_work_results(
         &mut self,
         work_client: &mut WorkManager,
-    ) -> Result<(), CoreClientError> {
-        for result in work_client.get_results().await {
+    ) -> Result<bool, CoreClientError> {
+        let results = work_client.get_results().await;
+        let should_save = !results.is_empty();
+
+        for result in results {
             let as_hex = hex::encode(result.work_hash).to_uppercase();
             let work = match result.rpc_result {
                 Ok(work) => self.handle_rpc_success(work),
@@ -273,6 +290,6 @@ impl CoreClient {
                 error!("CoreClient::handle_work_results(): {err}: could not find frontier {as_hex} in DB")
             }
         }
-        Ok(())
+        Ok(should_save)
     }
 }

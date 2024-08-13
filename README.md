@@ -1,8 +1,8 @@
 # Camo Nano Wallet
 
-Privacy-oriented wallets for the [Nano](https://nano.org/) cryptocurrency.
+A privacy-oriented wallet for the [Nano](https://nano.org/) cryptocurrency.
 
-These wallets are intended to act as a reference implementation for Camo Nano. See below for more details.
+This wallet is intended to act as a reference implementation for Camo Nano. See below for more details.
 
 ### CLI Wallet
 
@@ -16,7 +16,7 @@ Like most cryptocurrencies, Nano offers little in the way of privacy. With a nor
 
 Camo accounts do not have a publically visible transaction history, allowing users to make private payments to each other. When using a Camo account, no one except for you can know how many coins you've received, or from whom.
 
-Note that Camo Nano is a **custom, experimental, and non-standard protocol**, and are generally not supported by other wallets or the wider Nano ecosystem. If you would like to see this feature implemented in other wallets, encourage other developers to support them. See [here](https://crates.io/crates/nanopyrs) for a Rust Nano library which supports Camo Nano, and [here](https://github.com/CamoNano/nanopyrs/blob/main/CAMO-PROTOCOL.md) for documentation of the Camo Nano protocol.
+Note that Camo Nano is a **custom, experimental, and non-standard protocol**, and is generally not supported by other wallets or the wider Nano ecosystem. If you would like to see this feature implemented in other wallets, encourage other developers to support them. See [here](https://crates.io/crates/nanopyrs) for a Rust Nano library which supports Camo Nano, and [here](https://github.com/CamoNano/nanopyrs/blob/main/CAMO-PROTOCOL.md) for documentation of the Camo Nano protocol.
 
 ## Security
 

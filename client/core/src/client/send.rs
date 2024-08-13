@@ -52,6 +52,10 @@ fn create_send_block(
     payment: Payment,
     sender_frontier: &FrontierInfo,
 ) -> Result<Block, CoreClientError> {
+    if payment.sender == payment.recipient {
+        return Err(CoreClientError::InvalidPayment);
+    }
+
     let work = sender_frontier.cached_work().unwrap_or([0; 8]);
     let frontier = &sender_frontier.block;
 
@@ -93,6 +97,10 @@ pub async fn send(
     work_client: &mut WorkManager,
     payment: Payment,
 ) -> RpcResult<NewFrontiers> {
+    if payment.sender == payment.recipient {
+        return Err(CoreClientError::InvalidPayment);
+    }
+
     let frontier = &client
         .frontiers_db
         .account_frontier(&payment.sender)
@@ -105,7 +113,7 @@ pub async fn send(
     Ok((vec![info].into(), rpc_failures).into())
 }
 
-/// publish both blocks: notification first, to minimize damage if an error occurs.
+/// Publish both blocks: Notification first, to minimize damage if an error occurs.
 /// **Does not** cache work for the next block.
 async fn camo_auto_publish_blocks(
     client: &CoreClient,
@@ -142,6 +150,12 @@ async fn _send_camo_same(
         .frontiers_db
         .account_frontier(&payment.sender)
         .ok_or(CoreClientError::AccountNotFound)?;
+
+    let total_amount = payment.notification_amount + payment.sender_amount;
+    if sender_frontier.block.balance < total_amount {
+        return Err(CoreClientError::NotEnoughCoins);
+    }
+
     let sender_key = client
         .wallet_db
         .find_key(&client.seed, &payment.sender)
@@ -151,7 +165,6 @@ async fn _send_camo_same(
     let Notification::V1(notification) = &notification;
     let derived = payment.recipient.derive_account(&shared_secret);
 
-    info!("Creating sender block...");
     let send_block = create_send_block(
         client,
         Payment {
@@ -162,13 +175,8 @@ async fn _send_camo_same(
         },
         sender_frontier,
     )?;
-    let (sender_frontier, mut rpc_failures) = ClientRpc()
-        .auto_publish_unsynced(&client.config, work_client, sender_frontier, send_block)
-        .await?
-        .into();
 
-    info!("Creating notifier block...");
-    let notification_block = create_send_block(
+    let notify_block = create_send_block(
         client,
         Payment {
             sender: payment.notifier.clone(),
@@ -176,15 +184,18 @@ async fn _send_camo_same(
             recipient: notification.recipient.clone(),
             new_representative: Some(notification.representative_payload.clone()),
         },
-        &sender_frontier,
+        sender_frontier,
     )?;
+
+    // Publish both blocks: Notification first, to minimize damage if an error occurs
+    info!("Creating notifier transaction (this might take a while)...");
+    let (sender_frontier, mut rpc_failures) = ClientRpc()
+        .auto_publish_unsynced(&client.config, work_client, sender_frontier, notify_block)
+        .await?
+        .into();
+    info!("Creating sender transaction (this might take a while)...");
     let (sender_frontier, rpc_failures_2) = ClientRpc()
-        .auto_publish_unsynced(
-            &client.config,
-            work_client,
-            &sender_frontier,
-            notification_block,
-        )
+        .auto_publish_unsynced(&client.config, work_client, &sender_frontier, send_block)
         .await?
         .into();
     rpc_failures.merge_with(rpc_failures_2);
@@ -199,6 +210,13 @@ pub async fn send_camo(
     work_client: &mut WorkManager,
     payment: CamoPayment,
 ) -> RpcResult<NewFrontiers> {
+    if payment.sender == payment.recipient.signer_account() {
+        return Err(CoreClientError::InvalidPayment);
+    }
+    if payment.notifier == payment.recipient.signer_account() {
+        return Err(CoreClientError::InvalidPayment);
+    }
+
     let config = &client.config;
 
     if payment.notifier == payment.sender {
@@ -217,12 +235,8 @@ pub async fn send_camo(
         .ok_or(CoreClientError::AccountNotFound)?;
 
     // ensure that we have work for both blocks
-    let notification_work = ClientRpc()
-        .get_work(config, work_client, notifier_frontier)
-        .await?;
-    let send_work = ClientRpc()
-        .get_work(config, work_client, sender_frontier)
-        .await?;
+    let notification_work = ClientRpc().get_work(config, work_client, notifier_frontier)?;
+    let send_work = ClientRpc().get_work(config, work_client, sender_frontier)?;
     let (notification_work, work_failures_1) = notification_work.into();
     let (send_work, work_failures_2) = send_work.into();
     rpc_failures.merge_with(work_failures_1);

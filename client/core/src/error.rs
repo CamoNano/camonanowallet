@@ -24,6 +24,8 @@ pub enum CoreClientError {
     NotEnoughCoins,
     #[error("amount below dust threshold")]
     BelowDustThreshold,
+    #[error("invalid payment: account cannot send coins to itself")]
+    InvalidPayment,
     #[error("the blocks database detected a balance overflow")]
     FrontierBalanceOverflow,
     #[error("the blocks database detected an invalid epoch block")]
