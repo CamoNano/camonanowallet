@@ -343,7 +343,8 @@ impl FrontiersDB {
         work: [u8; 8],
     ) -> Result<(), CoreClientError> {
         if let Some(info) = self.account_frontier_mut(account) {
-            Ok(info.cache_work(config, work))
+            info.cache_work(config, work);
+            Ok(())
         } else {
             Err(CoreClientError::AccountNotFound)
         }
@@ -358,7 +359,8 @@ impl FrontiersDB {
         work: [u8; 8],
     ) -> Result<(), CoreClientError> {
         if let Some(info) = self.get_hash_mut(work_hash) {
-            Ok(info.cache_work(config, work))
+            info.cache_work(config, work);
+            Ok(())
         } else {
             Err(CoreClientError::AccountNotFound)
         }

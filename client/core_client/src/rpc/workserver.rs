@@ -51,7 +51,7 @@ pub enum WorkServerDisconnected {
     ReceiveRequest,
 }
 impl WorkServerDisconnected {
-    fn to_work_result(self, hash: [u8; 32]) -> WorkResult {
+    fn into_work_result(self, hash: [u8; 32]) -> WorkResult {
         WorkResult {
             work_hash: hash,
             rpc_result: Err(self.into()),
@@ -140,7 +140,7 @@ impl WorkClient {
         loop {
             if let Err(err) = self.update() {
                 remove!(self.requests, &hash);
-                return err.to_work_result(hash);
+                return err.into_work_result(hash);
             }
             if let Some(result) = remove!(self.results.hash, hash) {
                 remove!(self.requests, &hash);

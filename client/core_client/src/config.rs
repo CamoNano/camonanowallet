@@ -84,6 +84,11 @@ impl CoreClientConfig {
 
     #[cfg(test)]
     pub(crate) fn test_default() -> CoreClientConfig {
-        CoreClientConfig::default_with(vec![nanopyrs::constants::get_genesis_account()], vec![])
+        let mut config = CoreClientConfig::default_with(
+            vec![nanopyrs::constants::get_genesis_account()],
+            vec![],
+        );
+        config.WORK_DIFFICULTY = 0;
+        config
     }
 }
