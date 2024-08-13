@@ -1,7 +1,8 @@
 use super::{choose_representatives, CoreClient};
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
-use crate::rpc::{workserver::WorkClient, ClientRpc, RpcManager, RpcResult, RpcSuccess};
+use crate::rpc::{ClientRpc, RpcManager, RpcResult, RpcSuccess};
+use crate::workserver::WorkClient;
 use nanopyrs::{rpc::Receivable, Account, Block, BlockType, Signature};
 
 /// Create a signed `receive` block for the given pending transaction.
@@ -77,7 +78,8 @@ pub async fn get_accounts_receivable(
     Ok((receivable.into_iter().flatten().collect(), rpc_failures).into())
 }
 
-/// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work if enabled.
+/// Receive a single transaction, returning the new frontier of that account (the `receive` block).
+/// **Does** cache work for the next block, if enabled.
 pub async fn receive_single(
     client: &CoreClient,
     work_client: &mut WorkClient,

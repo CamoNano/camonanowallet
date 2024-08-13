@@ -1,6 +1,6 @@
 use crate::rpc::{RpcManager, RpcResult};
 use crate::CoreClientConfig;
-use log::{debug, warn};
+use log::{debug, error};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
@@ -29,7 +29,7 @@ pub fn create_work_server(config: CoreClientConfig) -> (WorkClient, WorkServer) 
 
 macro_rules! remove {
     ($self:tt.$vec:ident.hash, $value:expr) => {{
-        let index = $self.$vec.iter().position(|item| item.hash == $value);
+        let index = $self.$vec.iter().position(|item| item.work_hash == $value);
         index.map(|index| $self.$vec.remove(index))
     }};
 
@@ -53,7 +53,7 @@ pub enum WorkServerDisconnected {
 impl WorkServerDisconnected {
     fn to_work_result(self, hash: [u8; 32]) -> WorkResult {
         WorkResult {
-            hash,
+            work_hash: hash,
             rpc_result: Err(self.into()),
         }
     }
@@ -61,13 +61,13 @@ impl WorkServerDisconnected {
 
 #[derive(Debug)]
 struct WorkRequest {
-    hash: [u8; 32],
+    work_hash: [u8; 32],
     config: CoreClientConfig,
 }
 
 #[derive(Debug)]
 pub struct WorkResult {
-    pub hash: [u8; 32],
+    pub work_hash: [u8; 32],
     pub rpc_result: RpcResult<[u8; 8]>,
 }
 
@@ -89,7 +89,7 @@ impl WorkClient {
 
     fn ack_result(&mut self, result: WorkResult) {
         // remove request from "waiting list"
-        remove!(self.requests, &result.hash);
+        remove!(self.requests, &result.work_hash);
         self.results.push(result)
     }
 
@@ -100,7 +100,8 @@ impl WorkClient {
                 Ok(result) => self.ack_result(result),
                 Err(RecvTimeoutError::Timeout) => return Ok(()),
                 Err(RecvTimeoutError::Disconnected) => {
-                    return Err(WorkServerDisconnected::ReceiveResult)
+                    error!("Work client lost connection to server (receive-result channel)");
+                    return Err(WorkServerDisconnected::ReceiveResult);
                 }
             };
         }
@@ -116,11 +117,11 @@ impl WorkClient {
     ) -> Result<(), WorkServerDisconnected> {
         self.ack_request(hash);
         let request = WorkRequest {
-            hash,
+            work_hash: hash,
             config: config.clone(),
         };
         if self.requests_channel.send(request).is_err() {
-            warn!("Work client lost connection to server (send-request channel)");
+            error!("Work client lost connection to server (send-request channel)");
             return Err(WorkServerDisconnected::SendRequest);
         }
         Ok(())
@@ -158,6 +159,16 @@ impl WorkClient {
             yield_now().await;
         }
     }
+
+    pub fn get_result(&mut self, hash: [u8; 32]) -> Option<WorkResult> {
+        let _ = self.update();
+        remove!(self.results.hash, hash)
+    }
+
+    pub fn get_results(&mut self) -> Vec<WorkResult> {
+        let _ = self.update();
+        std::mem::take(&mut self.results)
+    }
 }
 
 #[derive(Debug)]
@@ -172,8 +183,8 @@ pub struct WorkServer {
 impl WorkServer {
     fn ack_request(&mut self, request: WorkRequest) {
         self.config = request.config;
-        remove!(self.requests, &request.hash);
-        self.requests.push(request.hash)
+        remove!(self.requests, &request.work_hash);
+        self.requests.push(request.work_hash)
     }
 
     /// Acknowledge all requests and purge any duplicates received while processing a batch of work.
@@ -210,7 +221,7 @@ impl WorkServer {
                 );
                 let rpc_result = rpc.work_generate(&self.config, request, None).await;
                 results.push(WorkResult {
-                    hash: request,
+                    work_hash: request,
                     rpc_result,
                 });
                 debug!(
@@ -221,18 +232,18 @@ impl WorkServer {
 
             let hashes = results
                 .iter()
-                .map(|result| result.hash)
+                .map(|result| result.work_hash)
                 .collect::<Vec<[u8; 32]>>();
             for result in results {
                 // Send results back
                 if self.results_channel.send(result).is_err() {
                     // The only way to get an error is if the channel has disconnected
-                    warn!("Work server lost connection to client (send-result channel)");
+                    error!("Work server lost connection to client (send-result channel)");
                     return Err(WorkServerDisconnected::SendResult);
                 }
             }
             if let Err(err) = self.update(&hashes) {
-                warn!("Work server lost connection to client (receive-request channel)");
+                error!("Work server lost connection to client (receive-request channel)");
                 return Err(err);
             }
             yield_now().await;

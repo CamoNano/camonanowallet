@@ -89,12 +89,12 @@ impl Client {
     }
 
     /// Remove this account's receivable transactions from the DB
-    pub fn remove_receivable(&mut self, account: &Account) {
+    fn remove_receivable(&mut self, account: &Account) {
         self.cached_receivable
             .retain(|_, receivable| &receivable.recipient != account);
     }
 
-    pub fn insert_receivable(&mut self, receivables: Vec<Receivable>) {
+    fn insert_receivable(&mut self, receivables: Vec<Receivable>) {
         for receivable in receivables {
             self.cached_receivable
                 .insert(receivable.block_hash, receivable);
@@ -103,14 +103,14 @@ impl Client {
 
     /// Remove an account from all DB's.
     /// This method works for both normal and derived Nano accounts.
-    pub fn remove_account(&mut self, account: &Account) -> Result<(), ClientError> {
+    fn remove_account(&mut self, account: &Account) -> Result<(), ClientError> {
         self.remove_receivable(account);
         self.internal.remove_account(account)?;
         Ok(())
     }
 
     /// Remove a camo account, and its derived accounts, from all DB's.
-    pub fn remove_camo_account(&mut self, camo_account: &CamoAccount) -> Result<(), ClientError> {
+    fn remove_camo_account(&mut self, camo_account: &CamoAccount) -> Result<(), ClientError> {
         let derived = self.internal.get_derived_accounts_from_master(camo_account);
         for account in derived {
             self.remove_receivable(&account)
@@ -121,12 +121,16 @@ impl Client {
         Ok(())
     }
 
-    pub fn handle_rescan(&mut self, rescan: RescanData) {
+    fn handle_rescan(&mut self, rescan: RescanData) {
         self.internal.set_new_frontiers(rescan.new_frontiers);
         self.internal
             .wallet_db
             .derived_account_db
             .insert_many(rescan.derived_info);
         self.insert_receivable(rescan.receivable);
+    }
+
+    pub fn update_work_cache(&mut self) -> Result<(), ClientError> {
+        Ok(self.internal.handle_work_results(&mut self.work_client)?)
     }
 }

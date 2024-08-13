@@ -13,8 +13,11 @@ use client::{
 use error::CliError;
 use init::{prompt_password, Init};
 use std::io::{stdin, stdout, Write};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::time::Duration;
 use storage::{load_config, save_config, save_wallet_overriding};
 use tokio::runtime::Runtime;
+use tokio::task;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(Debug, Zeroize, ZeroizeOnDrop)]
@@ -36,31 +39,52 @@ impl CliClient {
         save_wallet_overriding(self, &self.client.name, &self.client.key)
     }
 
-    async fn _start_cli(&mut self) {
+    fn work_cache_loop(mut self, stop: Receiver<()>) -> Result<CliClient, CliError> {
+        loop {
+            let message = stop.recv_timeout(Duration::from_millis(10));
+            if let Err(RecvTimeoutError::Timeout) = message {
+                self.client.update_work_cache()?;
+            } else {
+                break;
+            }
+        }
+        Ok(self)
+    }
+
+    async fn _start_cli(mut self) {
         loop {
             print!("> ");
             stdout().flush().expect("failed to flush stdout");
 
+            let (sender, receiver) = channel();
+
+            let work_cache_loop = task::spawn(async move { self.work_cache_loop(receiver) });
+
             let mut input = String::new();
             stdin().read_line(&mut input).expect("failed to read stdin");
 
-            let result = Command::execute(self, &input).await;
-            self.save_to_disk().expect("failed to save wallet to disk");
+            sender.send(()).expect("Failed to stop work cache loop");
+            self = work_cache_loop
+                .await
+                .expect("Failed to await work cache loop")
+                .expect("Error in work cache loop");
+
+            let result = Command::execute(&mut self, &input).await;
+            self.save_to_disk().expect("Failed to save wallet to disk");
 
             match result {
-                Ok(true) => continue,
+                Ok(true) => (),
                 Ok(false) => break,
                 Err(err) => println!("{:?}", err),
             }
         }
     }
 
-    fn start(&mut self, work_server: WorkServer) {
+    fn start(self, work_server: WorkServer) {
         let rt = Runtime::new().expect("could not create Tokio runtime");
         rt.spawn(async move {
             let _ = work_server.start().await;
         });
-        // drop(work_server);
         rt.block_on(self._start_cli());
     }
 }
@@ -100,7 +124,7 @@ fn main() {
         }
     };
 
-    let (mut client, work_server) = match client {
+    let (client, work_server) = match client {
         Some((client, work_server)) => (client, work_server),
         None => return,
     };

@@ -21,4 +21,5 @@ pub use nanopyrs::{
     rpc::Receivable,
     Account, Block, BlockType, Key, Scalar, SecretBytes, Signature,
 };
+pub use rpc::workserver;
 pub use wallet::WalletSeed;

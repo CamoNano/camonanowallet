@@ -1,4 +1,4 @@
-use crate::rpc::workserver::WorkServerDisconnected;
+use crate::workserver::WorkServerDisconnected;
 use nanopyrs::{rpc::RpcError, NanoError};
 use thiserror::Error;
 

@@ -87,7 +87,7 @@ impl FrontierInfo {
         FrontierInfo::new_unopened(self.block.account.clone()) == *self
     }
 
-    pub fn work_hash(&self) -> [u8; 32] {
+    pub fn cache_work_hash(&self) -> [u8; 32] {
         if self.is_unopened() {
             self.block.account.compressed.to_bytes()
         } else {
@@ -99,11 +99,11 @@ impl FrontierInfo {
         self.cached_work
     }
 
-    pub fn set_work(&mut self, config: &CoreClientConfig, work: [u8; 8]) {
+    pub fn cache_work(&mut self, config: &CoreClientConfig, work: [u8; 8]) {
         self.cached_work = Some(work);
         if !self.has_valid_work(config) {
             let account = &self.block.account;
-            let work_hash = hex::encode_upper(self.work_hash());
+            let work_hash = hex::encode_upper(self.cache_work_hash());
             let work = hex::encode(work);
             error!(
                 "Attempted to cache invalid work for {account} with work hash {work_hash}: {work}"
@@ -118,7 +118,11 @@ impl FrontierInfo {
 
     pub fn has_valid_work(&mut self, config: &CoreClientConfig) -> bool {
         if let Some(work) = self.cached_work {
-            check_work(self.work_hash(), config.WORK_DIFFICULTY.to_be_bytes(), work)
+            check_work(
+                self.cache_work_hash(),
+                config.WORK_DIFFICULTY.to_be_bytes(),
+                work,
+            )
         } else {
             false
         }
@@ -150,6 +154,12 @@ impl FrontiersDB {
     fn get_hash(&self, hash: [u8; 32]) -> Option<&FrontierInfo> {
         let index = search!(self.frontiers, Hash, hash)?;
         Some(&self.frontiers[index])
+    }
+
+    /// Returns `None` if the block could not be found
+    fn get_hash_mut(&mut self, hash: [u8; 32]) -> Option<&mut FrontierInfo> {
+        let index = search!(self.frontiers, Hash, hash)?;
+        Some(&mut self.frontiers[index])
     }
 
     fn _get_index(&self, index: Option<usize>) -> Option<&FrontierInfo> {
@@ -328,12 +338,27 @@ impl FrontiersDB {
     /// Returns `Err` if the action was not successful.
     pub fn set_account_work(
         &mut self,
+        config: &CoreClientConfig,
         account: &Account,
         work: [u8; 8],
     ) -> Result<(), CoreClientError> {
         if let Some(info) = self.account_frontier_mut(account) {
-            info.cached_work = Some(work);
-            Ok(())
+            Ok(info.cache_work(config, work))
+        } else {
+            Err(CoreClientError::AccountNotFound)
+        }
+    }
+
+    /// Set the cached work for an account's frontier.
+    /// Returns `Err` if the action was not successful.
+    pub fn add_work(
+        &mut self,
+        config: &CoreClientConfig,
+        work_hash: [u8; 32],
+        work: [u8; 8],
+    ) -> Result<(), CoreClientError> {
+        if let Some(info) = self.get_hash_mut(work_hash) {
+            Ok(info.cache_work(config, work))
         } else {
             Err(CoreClientError::AccountNotFound)
         }
@@ -476,9 +501,11 @@ mod tests {
 
     #[test]
     fn set_work() {
+        let mut config = CoreClientConfig::test_default();
         let mut db = fake_db().unwrap();
 
-        db.set_account_work(&fake_account_1(), [7; 8]).unwrap();
+        db.set_account_work(&config, &fake_account_1(), [7; 8])
+            .unwrap();
         let frontier = db.account_frontier(&fake_account_1()).unwrap();
         assert!(frontier.cached_work == Some([7; 8]));
     }

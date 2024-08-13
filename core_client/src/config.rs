@@ -40,7 +40,7 @@ pub struct CoreClientConfig {
     pub RPC_ACCOUNT_HISTORY_BATCH_SIZE: usize,
     /// transactions will be received in batches of this size
     pub RPC_RECEIVE_TRANSACTIONS_BATCH_SIZE: usize,
-    /// Enable setting work cache
+    /// Enable setting work cache (added in v0.1.1)
     #[serde(default = "default_true")]
     pub ENABLE_WORK_CACHE: bool,
 

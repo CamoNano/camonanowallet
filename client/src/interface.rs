@@ -18,11 +18,13 @@ pub struct Command {
     command: CommandType,
 }
 impl Command {
-    /// `Ok(true)` means continue looping, `Ok(false)` means exit
+    /// `Ok(true)` means continue looping, `Ok(false)` means exit.
     pub async fn execute<Frontend: CliFrontend>(
         frontend: &mut Frontend,
         command: &str,
     ) -> Result<bool, ClientError> {
+        frontend.client_mut().update_work_cache()?;
+
         let command = command.split_whitespace();
         let command = match Command::try_parse_from(command) {
             Ok(command) => command,
@@ -32,7 +34,7 @@ impl Command {
             }
         };
 
-        match command.command {
+        let result = match command.command {
             CommandType::Account(args) => args.execute(frontend).await,
             CommandType::Balance(args) => args.execute(frontend),
             CommandType::CamoHistory(args) => args.execute(frontend),
@@ -47,7 +49,10 @@ impl Command {
             CommandType::Send(args) => args.execute(frontend).await,
             CommandType::SendCamo(args) => args.execute(frontend).await,
             CommandType::Quit(args) => args.execute(),
-        }
+        }?;
+
+        frontend.client_mut().update_work_cache()?;
+        Ok(result)
     }
 }
 

@@ -1,7 +1,8 @@
 use super::{choose_representatives, CoreClient};
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
-use crate::rpc::{workserver::WorkClient, ClientRpc, RpcFailures, RpcResult};
+use crate::rpc::{ClientRpc, RpcFailures, RpcResult};
+use crate::workserver::WorkClient;
 use log::info;
 use nanopyrs::{
     camo::{CamoAccount, Notification},
@@ -87,6 +88,7 @@ fn create_send_block(
 }
 
 /// Send to a `nano_` account.
+/// **Does** cache work for the next block, if enabled.
 pub async fn send(
     client: &CoreClient,
     work_client: &mut WorkClient,
@@ -104,7 +106,8 @@ pub async fn send(
     Ok((vec![info].into(), rpc_failures).into())
 }
 
-/// publish both blocks: notification first, to minimize damage if an error occurs
+/// publish both blocks: notification first, to minimize damage if an error occurs.
+/// **Does not** cache work for the next block.
 async fn camo_auto_publish_blocks(
     client: &CoreClient,
     notification_block: Block,
@@ -124,7 +127,8 @@ async fn camo_auto_publish_blocks(
     Ok(((notification_frontier, send_frontier), rpc_failures).into())
 }
 
-/// Send to a `camo_` account, were the sender and notifier are identical
+/// Send to a `camo_` account, where the sender and notifier the same account.
+/// **Does** cache work for the next block, if enabled.
 async fn _send_camo_same(
     client: &CoreClient,
     work_client: &mut WorkClient,
@@ -190,6 +194,7 @@ async fn _send_camo_same(
 }
 
 /// Send to a `camo_` account.
+/// **Does** cache work for the next block, if enabled.
 pub async fn send_camo(
     client: &CoreClient,
     work_client: &mut WorkClient,

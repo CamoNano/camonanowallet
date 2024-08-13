@@ -10,7 +10,7 @@ use std::iter::zip;
 #[derive(Debug)]
 pub struct ClientRpc();
 impl ClientRpc {
-    /// Get work for this frontier, either cached locally or from an RPC
+    /// Get cached work for this frontier, either cached locally or from an RPC
     pub async fn get_work(
         &self,
         config: &CoreClientConfig,
@@ -21,16 +21,21 @@ impl ClientRpc {
             return Ok((work, RpcFailures::default()).into());
         }
 
-        if work_client
-            .request_work(config, frontier.work_hash())
-            .is_ok()
-        {
-            work_client.wait_on(frontier.work_hash()).await.rpc_result
+        if let Some(work) = work_client.get_result(frontier.cache_work_hash()) {
+            return work.rpc_result;
+        }
+
+        let work_request = work_client.request_work(config, frontier.cache_work_hash());
+        if work_request.is_ok() {
+            work_client
+                .wait_on(frontier.cache_work_hash())
+                .await
+                .rpc_result
         } else {
             // Contingency plan
             warn!("Lost connection to WorkServer, using RpcManager for work generation");
             RpcManager()
-                .work_generate(config, frontier.work_hash(), None)
+                .work_generate(config, frontier.cache_work_hash(), None)
                 .await
         }
     }
@@ -104,6 +109,7 @@ impl ClientRpc {
     }
 
     /// Get work for a block, and publish it to the network.
+    /// **Does not** cache work for the next block.
     ///
     /// This is intended to be used internally, where we cannot rely on the DB being synced.
     pub(crate) async fn get_work_and_publish_unsynced(
@@ -126,6 +132,7 @@ impl ClientRpc {
     }
 
     /// Get work for a block, and publish it to the network.
+    /// **Does not** cache work for the next block.
     pub async fn get_work_and_publish(
         &self,
         config: &CoreClientConfig,
@@ -141,7 +148,7 @@ impl ClientRpc {
     }
 
     /// Get work for a block, and publish it to the network.
-    /// Also cache work for the next block, if enabled.
+    /// **Does** cache work for the next block, if enabled.
     ///
     /// This is intended to be used internally, where we cannot rely on the DB being synced.
     pub(crate) async fn auto_publish_unsynced(
@@ -151,15 +158,20 @@ impl ClientRpc {
         frontier: &FrontierInfo,
         block: Block,
     ) -> RpcResult<FrontierInfo> {
+        let block_hash = block.hash();
+        let result = self
+            .get_work_and_publish_unsynced(config, work_client, frontier, block)
+            .await;
+
+        // Cache work for next block
         if config.ENABLE_WORK_CACHE {
-            work_client.request_work(config, block.hash())?;
+            work_client.request_work(config, block_hash)?;
         }
-        self.get_work_and_publish_unsynced(config, work_client, frontier, block)
-            .await
+        result
     }
 
     /// Get work for a block, and publish it to the network.
-    /// Also cache work for the next block, if enabled.
+    /// **Does** cache work for the next block, if enabled.
     pub async fn auto_publish(
         &self,
         config: &CoreClientConfig,

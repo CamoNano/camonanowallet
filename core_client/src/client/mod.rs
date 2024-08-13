@@ -7,9 +7,9 @@ use super::error::CoreClientError;
 use super::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
 use super::rpc::{ClientRpc, RpcFailures, RpcResult, RpcSuccess};
 use super::wallet::{DerivedAccountInfo, WalletDB, WalletSeed};
-use crate::rpc::workserver::WorkClient;
+use crate::workserver::WorkClient;
 use camo::{get_camo_receivable, rescan_notifications_partial};
-use log::error;
+use log::{error, trace, warn};
 use nanopyrs::{
     camo::{CamoAccount, Notification},
     rpc::Receivable,
@@ -238,14 +238,42 @@ impl CoreClient {
         self.frontiers_db.remove(&account.signer_account())
     }
 
-    /// Handle the given RPC failures, adjusting future RPC selections as necessary
+    /// Handle the given RPC failures, adjusting future RPC selections as necessary.
     pub fn handle_rpc_failures(&mut self, failures: RpcFailures) {
         ClientRpc().handle_failures(&mut self.config, failures)
     }
 
-    /// Handle the given RPC failures, adjusting future RPC selections as necessary
+    /// Handle the given RPC failures, adjusting future RPC selections as necessary.
     pub fn handle_rpc_success<T>(&mut self, success: RpcSuccess<T>) -> T {
         self.handle_rpc_failures(success.failures);
         success.item
+    }
+
+    /// Handle the given work results, adjusting future RPC selections as necessary.
+    /// Can only return `Err` if something went wrong with `FrontiersDB`.
+    ///
+    /// Should be run regularly.
+    pub fn handle_work_results(
+        &mut self,
+        work_client: &mut WorkClient,
+    ) -> Result<(), CoreClientError> {
+        for result in work_client.get_results() {
+            let as_hex = hex::encode(result.work_hash).to_uppercase();
+            let work = match result.rpc_result {
+                Ok(work) => self.handle_rpc_success(work),
+                Err(e) => {
+                    warn!("CoreClient::handle_work_results(): work job failed for {as_hex}: {e}");
+                    continue;
+                }
+            };
+            trace!("CoreClient::handle_work_results(): caching work for work hash {as_hex}");
+            let result = self
+                .frontiers_db
+                .add_work(&self.config, result.work_hash, work);
+            if let Err(err) = result {
+                error!("CoreClient::handle_work_results(): {err}: could not find frontier {as_hex} in DB")
+            }
+        }
+        Ok(())
     }
 }
