@@ -7,7 +7,7 @@ use super::storage::{
 use super::CliClient;
 use clap::{Args, Parser, Subcommand};
 use client::{
-    core::{nanopyrs, rpc::workserver::WorkServer, SecretBytes, WalletSeed},
+    core::{nanopyrs, SecretBytes, WalletSeed},
     types::Hex32Bytes as Seed,
     ClientConfig, ClientError,
 };
@@ -46,7 +46,7 @@ pub struct Init {
     log: LevelFilter,
 }
 impl Init {
-    pub fn execute(self) -> Result<(Option<(CliClient, WorkServer)>, Logger), CliError> {
+    pub fn execute(self) -> Result<(Option<CliClient>, Logger), CliError> {
         let client = match self.command {
             InitType::New(args) => args.execute(),
             InitType::Import(args) => args.execute(),
@@ -85,7 +85,7 @@ struct NewArgs {
     name: String,
 }
 impl NewArgs {
-    fn execute(self) -> Result<Option<(CliClient, WorkServer)>, CliError> {
+    fn execute(self) -> Result<Option<CliClient>, CliError> {
         if wallet_exists(&self.name)? {
             return Err(CliError::WalletAlreadyExists);
         }
@@ -95,9 +95,9 @@ impl NewArgs {
         let seed = WalletSeed::from(rand::random::<[u8; 32]>());
         println!("seed: {}", seed.as_hex());
 
-        let (client, work_server) = CliClient::new(seed, self.name, key)?;
+        let client = CliClient::new(seed, self.name, key)?;
         save_wallet(&client, &client.client.name, &client.client.key)?;
-        Ok(Some((client, work_server)))
+        Ok(Some(client))
     }
 }
 
@@ -109,7 +109,7 @@ struct ImportArgs {
     seed: Seed,
 }
 impl ImportArgs {
-    fn execute(self) -> Result<Option<(CliClient, WorkServer)>, CliError> {
+    fn execute(self) -> Result<Option<CliClient>, CliError> {
         if wallet_exists(&self.name)? {
             return Err(CliError::WalletAlreadyExists);
         }
@@ -117,9 +117,9 @@ impl ImportArgs {
         let key = prompt_confirmed_password()?;
         let seed = WalletSeed::from(self.seed.0);
 
-        let (client, work_server) = CliClient::new(seed, self.name, key)?;
+        let client = CliClient::new(seed, self.name, key)?;
         save_wallet(&client, &client.client.name, &client.client.key)?;
-        Ok(Some((client, work_server)))
+        Ok(Some(client))
     }
 }
 
@@ -129,7 +129,7 @@ struct LoadArgs {
     name: String,
 }
 impl LoadArgs {
-    fn execute(self) -> Result<Option<(CliClient, WorkServer)>, CliError> {
+    fn execute(self) -> Result<Option<CliClient>, CliError> {
         if !wallet_exists(&self.name)? {
             return Err(CliError::WalletNotFound);
         }
@@ -145,7 +145,7 @@ struct DeleteArgs {
     name: String,
 }
 impl DeleteArgs {
-    fn execute(self) -> Result<Option<(CliClient, WorkServer)>, CliError> {
+    fn execute(self) -> Result<Option<CliClient>, CliError> {
         if !wallet_exists(&self.name)? {
             return Err(CliError::WalletAlreadyExists);
         }
@@ -158,7 +158,7 @@ impl DeleteArgs {
 #[derive(Debug, Clone, Args)]
 struct ListArgs {}
 impl ListArgs {
-    fn execute(self) -> Result<Option<(CliClient, WorkServer)>, CliError> {
+    fn execute(self) -> Result<Option<CliClient>, CliError> {
         let wallets = get_wallet_names()?;
         if wallets.is_empty() {
             println!("No wallets have been created yet")
@@ -177,7 +177,7 @@ struct ConfigArgs {
     reset: bool,
 }
 impl ConfigArgs {
-    fn execute(self) -> Result<Option<(CliClient, WorkServer)>, CliError> {
+    fn execute(self) -> Result<Option<CliClient>, CliError> {
         if self.reset {
             save_config(ClientConfig::default())?
         }

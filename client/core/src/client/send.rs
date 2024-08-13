@@ -1,8 +1,7 @@
 use super::{choose_representatives, CoreClient};
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
-use crate::rpc::{ClientRpc, RpcFailures, RpcResult};
-use crate::workserver::WorkClient;
+use crate::rpc::{ClientRpc, RpcFailures, RpcResult, WorkManager};
 use log::info;
 use nanopyrs::{
     camo::{CamoAccount, Notification},
@@ -91,7 +90,7 @@ fn create_send_block(
 /// **Does** cache work for the next block, if enabled.
 pub async fn send(
     client: &CoreClient,
-    work_client: &mut WorkClient,
+    work_client: &mut WorkManager,
     payment: Payment,
 ) -> RpcResult<NewFrontiers> {
     let frontier = &client
@@ -131,7 +130,7 @@ async fn camo_auto_publish_blocks(
 /// **Does** cache work for the next block, if enabled.
 async fn _send_camo_same(
     client: &CoreClient,
-    work_client: &mut WorkClient,
+    work_client: &mut WorkManager,
     payment: CamoPayment,
 ) -> RpcResult<NewFrontiers> {
     assert!(
@@ -197,7 +196,7 @@ async fn _send_camo_same(
 /// **Does** cache work for the next block, if enabled.
 pub async fn send_camo(
     client: &CoreClient,
-    work_client: &mut WorkClient,
+    work_client: &mut WorkManager,
     payment: CamoPayment,
 ) -> RpcResult<NewFrontiers> {
     let config = &client.config;
@@ -267,8 +266,8 @@ pub async fn send_camo(
 
     // cache work for future transactions
     if config.ENABLE_WORK_CACHE {
-        work_client.request_work(config, notification_block.hash())?;
-        work_client.request_work(config, send_block.hash())?;
+        work_client.request_work(config, notification_block.hash());
+        work_client.request_work(config, send_block.hash());
     }
 
     let publish_success = camo_auto_publish_blocks(client, notification_block, send_block).await?;

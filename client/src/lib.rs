@@ -9,9 +9,8 @@ pub mod storage;
 pub mod types;
 
 use core_client::{
-    rpc::workserver::{create_work_server, WorkClient, WorkServer},
-    Account, CamoAccount, CoreClient, CoreClientConfig, Receivable, RescanData, SecretBytes,
-    WalletSeed,
+    rpc::WorkManager, Account, CamoAccount, CoreClient, CoreClientConfig, Receivable, RescanData,
+    SecretBytes, WalletSeed,
 };
 use defaults::{default_representatives, default_rpcs};
 use serde::{Deserialize, Serialize};
@@ -67,7 +66,7 @@ pub struct Client {
     pub cached_receivable: HashMap<[u8; 32], Receivable>,
     pub camo_history: Vec<CamoTxSummary>,
     #[zeroize(skip)]
-    pub work_client: WorkClient,
+    pub work_client: WorkManager,
 }
 impl Client {
     pub fn new(
@@ -75,17 +74,16 @@ impl Client {
         name: String,
         key: SecretBytes<32>,
         config: CoreClientConfig,
-    ) -> Result<(Client, WorkServer), ClientError> {
-        let (work_client, work_server) = create_work_server(config.clone());
+    ) -> Result<Client, ClientError> {
         let client = Client {
             name,
             key,
             internal: CoreClient::new(seed, config),
             cached_receivable: HashMap::new(),
             camo_history: vec![],
-            work_client,
+            work_client: WorkManager::default(),
         };
-        Ok((client, work_server))
+        Ok(client)
     }
 
     /// Remove this account's receivable transactions from the DB
@@ -130,7 +128,10 @@ impl Client {
         self.insert_receivable(rescan.receivable);
     }
 
-    pub fn update_work_cache(&mut self) -> Result<(), ClientError> {
-        Ok(self.internal.handle_work_results(&mut self.work_client)?)
+    pub async fn update_work_cache(&mut self) -> Result<(), ClientError> {
+        Ok(self
+            .internal
+            .handle_work_results(&mut self.work_client)
+            .await?)
     }
 }

@@ -1,14 +1,14 @@
 [workspace]
 members = [
-    "client/core_client",
+    "client/core",
     "client",
-    "cli_client"
+    "cliwallet"
 ]
 
 resolver = "2"
 
 [workspace.dependencies]
-core_client = { path = "client/core_client", version = "0.1.1" }
+core_client = { path = "client/core", version = "0.1.1" }
 client = { path = "client", version = "0.1.1" }
 
 confy = { version = "0.6.0", default-features = false, features = ["yaml_conf"] }

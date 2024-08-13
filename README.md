@@ -6,7 +6,7 @@ These wallets are intended to act as a reference implementation for Camo Nano. S
 
 ### CLI Wallet
 
-See [`./cli_client`](./cli_client/) for the CLI version of this wallet.
+See [`./cliwallet`](./cliwallet/) for the CLI version of this wallet.
 
 ## Camo Nano
 

@@ -24,17 +24,17 @@ sudo apt install libssl-dev pkg-config
 Clone the repository:
 ```
 git clone https://github.com/CamoNano/camonanowallet.git
-cd camonanowallet/cli_client
+cd camonanowallet
 ```
 
 Compile using Cargo:
 ```
-cargo build --release
+cargo build --release --package cliwallet
 ```
 
 Run:
 ```
-./target/release/camonano
+./target/release/cliwallet
 ```
 
 If you experience an error while attempting to compile from source, please open an issue so that it can be resolved.
@@ -44,7 +44,7 @@ If you experience an error while attempting to compile from source, please open 
 For more details and options, use the `help` command:
 
 ```
-camonano help
+cliwallet help
 ```
 ...or
 ```
@@ -59,12 +59,12 @@ camonano help
 
 Create a new wallet:
 ```
-camonano new <NAME>
+cliwallet new <NAME>
 ```
 
 ... or load an existing one:
 ```
-camonano load <NAME>
+cliwallet load <NAME>
 ```
 
 You will be prompted for a password when creating/loading a wallet.
@@ -107,4 +107,4 @@ The wallet is saved automatically after each command finishes.
 
 ### Configuration
 
-Run `camonano config` to display the path to the configuration file. The RPCs and representatives that the software will use, among other things, are located there.
+Run `cliwallet config` to display the path to the configuration file. The RPCs and representatives that the software will use, among other things, are located there.

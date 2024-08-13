@@ -1,15 +1,15 @@
 mod client;
 mod manager;
 mod result;
+mod work;
 mod wrapped;
-
-pub mod workserver;
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub use client::ClientRpc;
 pub use manager::RpcManager;
 pub use result::{RpcFailure, RpcFailures, RpcResult, RpcSuccess};
+pub use work::{WorkHandle, WorkManager, WorkResult};
 pub use wrapped::{Rpc, RpcCommands};
 
 pub(super) fn get_current_time() -> u64 {

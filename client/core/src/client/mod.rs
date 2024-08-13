@@ -5,9 +5,8 @@ mod send;
 use super::config::CoreClientConfig;
 use super::error::CoreClientError;
 use super::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
-use super::rpc::{ClientRpc, RpcFailures, RpcResult, RpcSuccess};
+use super::rpc::{ClientRpc, RpcFailures, RpcResult, RpcSuccess, WorkManager};
 use super::wallet::{DerivedAccountInfo, WalletDB, WalletSeed};
-use crate::workserver::WorkClient;
 use camo::{get_camo_receivable, rescan_notifications_partial};
 use log::{error, trace, warn};
 use nanopyrs::{
@@ -151,7 +150,7 @@ impl CoreClient {
     /// Receive a single transaction, returning the new frontier of that account (the `receive` block), **with** cached work.
     pub async fn receive_single(
         &self,
-        work_client: &mut WorkClient,
+        work_client: &mut WorkManager,
         receivable: &Receivable,
     ) -> RpcResult<NewFrontiers> {
         receive_single(self, work_client, receivable).await
@@ -160,7 +159,7 @@ impl CoreClient {
     /// Send to a `nano_` account.
     pub async fn send(
         &self,
-        work_client: &mut WorkClient,
+        work_client: &mut WorkManager,
         payment: Payment,
     ) -> RpcResult<NewFrontiers> {
         send(self, work_client, payment).await
@@ -170,7 +169,7 @@ impl CoreClient {
     /// The notifier and sender accounts most be different for privacy reasons.
     pub async fn send_camo(
         &self,
-        work_client: &mut WorkClient,
+        work_client: &mut WorkManager,
         payment: CamoPayment,
     ) -> RpcResult<NewFrontiers> {
         send_camo(self, work_client, payment).await
@@ -253,11 +252,11 @@ impl CoreClient {
     /// Can only return `Err` if something went wrong with `FrontiersDB`.
     ///
     /// Should be run regularly.
-    pub fn handle_work_results(
+    pub async fn handle_work_results(
         &mut self,
-        work_client: &mut WorkClient,
+        work_client: &mut WorkManager,
     ) -> Result<(), CoreClientError> {
-        for result in work_client.get_results() {
+        for result in work_client.get_results().await {
             let as_hex = hex::encode(result.work_hash).to_uppercase();
             let work = match result.rpc_result {
                 Ok(work) => self.handle_rpc_success(work),

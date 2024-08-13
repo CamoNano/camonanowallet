@@ -2,8 +2,7 @@ use super::RpcManager;
 use crate::config::CoreClientConfig;
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
-use crate::rpc::{workserver::WorkClient, RpcFailures, RpcResult, RpcSuccess};
-use log::warn;
+use crate::rpc::{work::WorkManager, RpcFailures, RpcResult, RpcSuccess};
 use nanopyrs::{Account, Block};
 use std::iter::zip;
 
@@ -14,30 +13,16 @@ impl ClientRpc {
     pub async fn get_work(
         &self,
         config: &CoreClientConfig,
-        work_client: &mut WorkClient,
+        work_client: &mut WorkManager,
         frontier: &FrontierInfo,
     ) -> RpcResult<[u8; 8]> {
         if let Some(work) = frontier.cached_work() {
             return Ok((work, RpcFailures::default()).into());
         }
 
-        if let Some(work) = work_client.get_result(frontier.cache_work_hash()) {
-            return work.rpc_result;
-        }
-
-        let work_request = work_client.request_work(config, frontier.cache_work_hash());
-        if work_request.is_ok() {
-            work_client
-                .wait_on(frontier.cache_work_hash())
-                .await
-                .rpc_result
-        } else {
-            // Contingency plan
-            warn!("Lost connection to WorkServer, using RpcManager for work generation");
-            RpcManager()
-                .work_generate(config, frontier.cache_work_hash(), None)
-                .await
-        }
+        let work_hash = frontier.cache_work_hash();
+        work_client.request_work(config, work_hash);
+        work_client.wait_on(work_hash).await.rpc_result
     }
 
     /// Publish a block to the network
@@ -115,7 +100,7 @@ impl ClientRpc {
     pub(crate) async fn get_work_and_publish_unsynced(
         &self,
         config: &CoreClientConfig,
-        work_client: &mut WorkClient,
+        work_client: &mut WorkManager,
         frontier: &FrontierInfo,
         mut block: Block,
     ) -> RpcResult<FrontierInfo> {
@@ -136,7 +121,7 @@ impl ClientRpc {
     pub async fn get_work_and_publish(
         &self,
         config: &CoreClientConfig,
-        work_client: &mut WorkClient,
+        work_client: &mut WorkManager,
         frontiers_db: &FrontiersDB,
         block: Block,
     ) -> RpcResult<FrontierInfo> {
@@ -154,7 +139,7 @@ impl ClientRpc {
     pub(crate) async fn auto_publish_unsynced(
         &self,
         config: &CoreClientConfig,
-        work_client: &mut WorkClient,
+        work_client: &mut WorkManager,
         frontier: &FrontierInfo,
         block: Block,
     ) -> RpcResult<FrontierInfo> {
@@ -165,7 +150,7 @@ impl ClientRpc {
 
         // Cache work for next block
         if config.ENABLE_WORK_CACHE {
-            work_client.request_work(config, block_hash)?;
+            work_client.request_work(config, block_hash);
         }
         result
     }
@@ -175,7 +160,7 @@ impl ClientRpc {
     pub async fn auto_publish(
         &self,
         config: &CoreClientConfig,
-        work_client: &mut WorkClient,
+        work_client: &mut WorkManager,
         frontiers_db: &FrontiersDB,
         block: Block,
     ) -> RpcResult<FrontierInfo> {

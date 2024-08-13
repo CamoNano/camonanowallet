@@ -2,10 +2,7 @@ use super::error::CliError;
 use super::CliClient;
 use aes_gcm::Error as AESError;
 use client::{
-    core::{
-        rpc::workserver::{create_work_server, WorkServer},
-        CoreClient, CoreClientConfig, SecretBytes,
-    },
+    core::{rpc::WorkManager, CoreClient, CoreClientConfig, SecretBytes},
     storage::{EncryptedWallet, WalletData},
     Client, ClientConfig, ClientError,
 };
@@ -81,7 +78,7 @@ impl UserWallets {
         config: CoreClientConfig,
         name: &str,
         key: SecretBytes<32>,
-    ) -> Result<(CliClient, WorkServer), CliError> {
+    ) -> Result<CliClient, CliError> {
         if !self.wallet_exists(name) {
             return Err(CliError::WalletNotFound);
         }
@@ -98,16 +95,15 @@ impl UserWallets {
             frontiers_db: data.frontiers_db,
         };
 
-        let (work_client, work_server) = create_work_server(config);
         let client = Client {
             name: name.into(),
             key,
             internal: client,
             cached_receivable: data.cached_receivable,
             camo_history: data.camo_history,
-            work_client,
+            work_client: WorkManager::default(),
         };
-        Ok((CliClient { client }, work_server))
+        Ok(CliClient { client })
     }
 
     fn delete_wallet(&mut self, name: &str, key: &SecretBytes<32>) -> Result<(), CliError> {
@@ -185,7 +181,7 @@ pub fn save_wallet(
 }
 
 /// Load the wallet file from disk
-pub fn load_wallet(name: &str, key: SecretBytes<32>) -> Result<(CliClient, WorkServer), CliError> {
+pub fn load_wallet(name: &str, key: SecretBytes<32>) -> Result<CliClient, CliError> {
     let config = load_config()?;
     let wallets = UserWallets::load_from_disk()?;
     wallets.load_wallet(config, name, key)

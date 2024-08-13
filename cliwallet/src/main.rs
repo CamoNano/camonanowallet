@@ -7,7 +7,7 @@ mod storage;
 
 use clap::Parser;
 use client::{
-    core::{rpc::workserver::WorkServer, SecretBytes, WalletSeed},
+    core::{SecretBytes, WalletSeed},
     CliFrontend, Client, ClientError, Command,
 };
 use error::CliError;
@@ -25,13 +25,9 @@ struct CliClient {
     client: Client,
 }
 impl CliClient {
-    fn new(
-        seed: WalletSeed,
-        name: String,
-        key: SecretBytes<32>,
-    ) -> Result<(CliClient, WorkServer), CliError> {
-        let (client, work_server) = Client::new(seed, name, key, load_config()?)?;
-        Ok((CliClient { client }, work_server))
+    fn new(seed: WalletSeed, name: String, key: SecretBytes<32>) -> Result<CliClient, CliError> {
+        let client = Client::new(seed, name, key, load_config()?)?;
+        Ok(CliClient { client })
     }
 
     fn save_to_disk(&mut self) -> Result<(), CliError> {
@@ -39,11 +35,11 @@ impl CliClient {
         save_wallet_overriding(self, &self.client.name, &self.client.key)
     }
 
-    fn work_cache_loop(mut self, stop: Receiver<()>) -> Result<CliClient, CliError> {
+    async fn work_cache_loop(mut self, stop: Receiver<()>) -> Result<CliClient, CliError> {
         loop {
             let message = stop.recv_timeout(Duration::from_millis(10));
             if let Err(RecvTimeoutError::Timeout) = message {
-                self.client.update_work_cache()?;
+                self.client.update_work_cache().await?;
             } else {
                 break;
             }
@@ -58,7 +54,7 @@ impl CliClient {
 
             let (sender, receiver) = channel();
 
-            let work_cache_loop = task::spawn(async move { self.work_cache_loop(receiver) });
+            let work_cache_loop = task::spawn(self.work_cache_loop(receiver));
 
             let mut input = String::new();
             stdin().read_line(&mut input).expect("failed to read stdin");
@@ -80,11 +76,8 @@ impl CliClient {
         }
     }
 
-    fn start(self, work_server: WorkServer) {
+    fn start(self) {
         let rt = Runtime::new().expect("could not create Tokio runtime");
-        rt.spawn(async move {
-            let _ = work_server.start().await;
-        });
         rt.block_on(self._start_cli());
     }
 }
@@ -124,15 +117,10 @@ fn main() {
         }
     };
 
-    let (client, work_server) = match client {
-        Some((client, work_server)) => (client, work_server),
-        None => return,
-    };
-
     match logger.start_logging() {
         Ok(()) => (),
         Err(err) => println!("Failed to start logging: {err}"),
     }
 
-    client.start(work_server);
+    client.expect("Failed to initialize client").start();
 }

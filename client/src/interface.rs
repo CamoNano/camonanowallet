@@ -23,7 +23,7 @@ impl Command {
         frontend: &mut Frontend,
         command: &str,
     ) -> Result<bool, ClientError> {
-        frontend.client_mut().update_work_cache()?;
+        frontend.client_mut().update_work_cache().await?;
 
         let command = command.split_whitespace();
         let command = match Command::try_parse_from(command) {
@@ -51,7 +51,7 @@ impl Command {
             CommandType::Quit(args) => args.execute(),
         }?;
 
-        frontend.client_mut().update_work_cache()?;
+        frontend.client_mut().update_work_cache().await?;
         Ok(result)
     }
 }
