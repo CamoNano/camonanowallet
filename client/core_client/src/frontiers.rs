@@ -501,7 +501,7 @@ mod tests {
 
     #[test]
     fn set_work() {
-        let mut config = CoreClientConfig::test_default();
+        let config = CoreClientConfig::test_default();
         let mut db = fake_db().unwrap();
 
         db.set_account_work(&config, &fake_account_1(), [7; 8])

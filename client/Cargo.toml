@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2021"
 
 [dependencies]
-core_client = { path = "../core_client", version = "0.1.1" }
+core_client = { path = "core_client", version = "0.1.1" }
 thiserror = "1.0.49"
 zeroize = { version = "1.6.0", features = ["zeroize_derive"] }
 rand = "0.8.5"
