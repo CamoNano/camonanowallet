@@ -1,4 +1,4 @@
-# Camo Nano Wallet
+# CLI Wallet
 
 A command-line Camo Nano wallet. This wallet is targeted towards more advanced users.
 

@@ -1,18 +1,17 @@
-workspace = { members = ["cli_client"] }
 [package]
 name = "camonano"
 version = "0.1.1"
 edition = "2021"
 
 [dependencies]
-client = { path = "../client", version = "0.1.1" }
-thiserror = "1.0.49"
-zeroize = { version = "1.6.0", features = ["zeroize_derive"] }
-rand = "0.8.5"
-log = { version = "0.4.21", features = ["std"] }
-serde = { version = "1.0.196", features = ["derive"] }
-tokio = { version = "1.33.0", features = ["rt-multi-thread"] }
-clap = { version = "4.4.10", features = ["derive"] }
-confy = { version = "0.6.0", default-features = false, features = ["yaml_conf"] }
-rpassword = "7.3.1"
-aes-gcm = "0.10.3"
+client = { workspace = true }
+thiserror = { workspace = true }
+zeroize = { workspace = true, features = ["zeroize_derive"] }
+rand = { workspace = true }
+log = { workspace = true, features = ["std"] }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+clap = { workspace = true, features = ["derive"] }
+confy = { workspace = true }
+rpassword = { workspace = true }
+aes-gcm = { workspace = true }
