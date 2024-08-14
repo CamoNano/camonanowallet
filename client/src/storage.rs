@@ -1,5 +1,5 @@
 use super::types::CamoTxSummary;
-use crate::ClientError;
+use crate::{ClientError, CoreClient, Client};
 use aes_gcm::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     Aes256Gcm, Key, Nonce,
@@ -8,6 +8,8 @@ use argon2::Argon2;
 use core_client::{
     frontiers::FrontiersDB,
     wallet::{WalletDB, WalletSeed},
+    CoreClientConfig,
+    rpc::WorkManager,
     Receivable, SecretBytes,
 };
 use serde::{Deserialize, Serialize};
@@ -33,7 +35,7 @@ pub struct WalletData {
 impl WalletData {
     pub fn encrypt(
         mut self,
-        name: &str,
+        id: &str,
         key: &SecretBytes<32>,
     ) -> Result<EncryptedWallet, ClientError> {
         let salt = rand::random::<[u8; 32]>();
@@ -49,17 +51,33 @@ impl WalletData {
         self.zeroize();
         data.zeroize();
         Ok(EncryptedWallet {
-            name: name.into(),
+            id: id.into(),
             salt: hex::encode(salt),
             nonce: hex::encode(nonce),
             data: hex::encode(encrypted),
         })
     }
+
+    pub fn to_client(self, config: CoreClientConfig) -> Client {
+        let client = CoreClient {
+            seed: self.seed,
+            config,
+            wallet_db: self.wallet_db,
+            frontiers_db: self.frontiers_db,
+        };
+
+        Client {
+            core: client,
+            receivable: self.cached_receivable,
+            camo_history: self.camo_history,
+            work: WorkManager::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Zeroize, ZeroizeOnDrop, Serialize, Deserialize)]
 pub struct EncryptedWallet {
-    pub name: String,
+    pub id: String,
     pub salt: String,
     pub nonce: String,
     pub data: String,

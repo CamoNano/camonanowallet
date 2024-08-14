@@ -58,7 +58,7 @@ fn filter_receivable(receivables: &[&Receivable], account: &Account) -> Amount {
 }
 
 pub fn execute<Frontend: WalletFrontend>(frontend: &Frontend) -> Result<(), ClientError> {
-    let cli_client = frontend.client();
+    let client = frontend.client();
     fn print_balance<Frontend: WalletFrontend>(receivable: Amount, s: String) {
         match receivable.value > 0 {
             true => Frontend::println(&format!("{s} (+ {receivable} Nano receivable)")),
@@ -66,11 +66,11 @@ pub fn execute<Frontend: WalletFrontend>(frontend: &Frontend) -> Result<(), Clie
         }
     }
 
-    let client = &cli_client.internal;
-    let receivables: Vec<&Receivable> = cli_client.cached_receivable.values().collect();
+    let core_client = &client.core;
+    let receivables: Vec<&Receivable> = client.receivable.values().collect();
 
     // total balance
-    let total: Amount = client.wallet_balance().into();
+    let total: Amount = core_client.wallet_balance().into();
     let total_receivable: Amount = receivables
         .iter()
         .map(|receivable| receivable.amount)
@@ -79,8 +79,8 @@ pub fn execute<Frontend: WalletFrontend>(frontend: &Frontend) -> Result<(), Clie
     print_balance::<Frontend>(total_receivable, format!("total: {total} Nano"));
 
     // normal accounts
-    for (index, account) in get_normal_accounts(client) {
-        let balance = get_display_balance(client, &account);
+    for (index, account) in get_normal_accounts(core_client) {
+        let balance = get_display_balance(core_client, &account);
         let account_receivable = filter_receivable(&receivables, &account);
         print_balance::<Frontend>(
             account_receivable,
@@ -89,12 +89,12 @@ pub fn execute<Frontend: WalletFrontend>(frontend: &Frontend) -> Result<(), Clie
     }
 
     // camo accounts
-    for (index, camo_account) in get_camo_accounts(client) {
+    for (index, camo_account) in get_camo_accounts(core_client) {
         Frontend::println(&format!("{camo_account} (#{index}):"));
 
         // main account
         let main_account = camo_account.signer_account();
-        let balance = get_display_balance(client, &main_account);
+        let balance = get_display_balance(core_client, &main_account);
         let account_receivable = filter_receivable(&receivables, &main_account);
         print_balance::<Frontend>(
             account_receivable,
@@ -102,8 +102,8 @@ pub fn execute<Frontend: WalletFrontend>(frontend: &Frontend) -> Result<(), Clie
         );
 
         // derived accounts
-        for account in get_derived_accounts(client, &camo_account) {
-            let balance = get_display_balance(client, &account);
+        for account in get_derived_accounts(core_client, &camo_account) {
+            let balance = get_display_balance(core_client, &account);
             let account_receivable = filter_receivable(&receivables, &account);
             print_balance::<Frontend>(account_receivable, format!("\t{account}: {balance} Nano"));
         }

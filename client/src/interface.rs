@@ -119,7 +119,7 @@ impl RecoverNotificationArgs {
         self,
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
-        let client = &mut frontend.client_mut().internal;
+        let client = &mut frontend.client_mut().core;
         let seed = &client.seed;
         if let Some(key) = client.wallet_db.find_key(seed, &self.sender) {
             let (_, notification) = self.recipient.sender_ecdh(&key, self.frontier.0);
@@ -145,7 +145,7 @@ impl AckNotificationArgs {
         self,
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
-        let client = &mut frontend.client_mut().internal;
+        let client = &mut frontend.client_mut().core;
         let seed = &client.seed;
         if let Some(info) = client.wallet_db.camo_account_db.get_info(&self.recipient) {
             let notification = NotificationV1 {
@@ -184,7 +184,7 @@ impl AccountArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let client = frontend.client_mut();
-        let core_client = &mut client.internal;
+        let core_client = &mut client.core;
 
         let string = if self.camo {
             let mut versions = core_client.config.DEFAULT_CAMO_VERSIONS.clone();
@@ -287,7 +287,7 @@ impl ClearCacheArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let client = frontend.client_mut();
-        let core_client = &mut client.internal;
+        let core_client = &mut client.core;
 
         let accounts = if !self.accounts.is_empty() {
             self.accounts
@@ -326,8 +326,8 @@ impl NotifyArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let client = frontend.client_mut();
-        let work_client = &mut client.work_client;
-        let core_client = &mut client.internal;
+        let work_client = &mut client.work;
+        let core_client = &mut client.core;
 
         if self.amount.value < CAMO_SENDER_DUST_THRESHOLD {
             return Err(ClientError::AmountBelowDustThreshold);
@@ -367,9 +367,9 @@ impl ReceiveArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let client = frontend.client_mut();
-        let work_client = &mut client.work_client;
-        let core_client = &mut client.internal;
-        let cached_receivable = &mut client.cached_receivable;
+        let work_client = &mut client.work;
+        let core_client = &mut client.core;
+        let cached_receivable = &mut client.receivable;
 
         let receivables: Vec<Receivable> = if !self.blocks.is_empty() {
             self.blocks
@@ -435,7 +435,7 @@ impl RefreshArgs {
     ) -> Result<bool, ClientError> {
         let client = frontend.client_mut();
         Frontend::println("Downloading receivable transactions...");
-        let core_client = &mut client.internal;
+        let core_client = &mut client.core;
         let accounts = core_client.wallet_db.all_nano_accounts();
         let receivables = core_client.download_receivable(&accounts).await?;
         let (receivables, infos) = core_client.handle_rpc_success(receivables);
@@ -447,7 +447,7 @@ impl RefreshArgs {
         client.insert_receivable(receivables);
 
         Frontend::println("Updating account frontiers...");
-        let core_client = &mut client.internal;
+        let core_client = &mut client.core;
         let frontiers = core_client.download_frontiers(&accounts).await?;
         let frontiers = core_client.handle_rpc_success(frontiers);
         core_client.set_new_frontiers(frontiers);
@@ -497,7 +497,7 @@ impl RescanArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let client = frontend.client_mut();
-        let core_client = &mut client.internal;
+        let core_client = &mut client.core;
 
         let filter = !self.no_filter;
         let account = self.account.signer_account();
@@ -548,7 +548,7 @@ struct SeedArgs {}
 impl SeedArgs {
     fn execute<Frontend: WalletFrontend>(self, frontend: &Frontend) -> Result<bool, ClientError> {
         frontend.authenticate()?;
-        Frontend::println(&frontend.client().internal.seed.as_hex().to_string());
+        Frontend::println(&frontend.client().core.seed.as_hex().to_string());
         Ok(true)
     }
 }
@@ -571,8 +571,8 @@ impl SendArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let client = frontend.client_mut();
-        let work_client = &mut client.work_client;
-        let core_client = &mut client.internal;
+        let work_client = &mut client.work;
+        let core_client = &mut client.core;
 
         let payment = Payment {
             sender: self.sender,
@@ -614,8 +614,8 @@ impl SendCamoArgs {
         frontend: &mut Frontend,
     ) -> Result<bool, ClientError> {
         let client = frontend.client_mut();
-        let work_client = &mut client.work_client;
-        let core_client = &mut client.internal;
+        let work_client = &mut client.work;
+        let core_client = &mut client.core;
 
         let notifier_amount = if let Some(notifier_amount) = self.notifier_amount {
             // if a notifier amount was given

@@ -2,9 +2,9 @@ use super::error::CliError;
 use super::CliClient;
 use aes_gcm::Error as AESError;
 use client::{
-    core::{rpc::WorkManager, CoreClient, CoreClientConfig, SecretBytes},
+    core::{CoreClientConfig, SecretBytes},
     storage::{EncryptedWallet, WalletData},
-    Client, ClientConfig, ClientError,
+    ClientConfig, ClientError,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -30,18 +30,15 @@ impl UserWallets {
     }
 
     fn wallet_exists(&self, name: &str) -> bool {
-        self.wallets.iter().any(|wallet| wallet.name == name)
+        self.wallets.iter().any(|wallet| wallet.id == name)
     }
 
     fn save_wallet_override(
         &mut self,
-        client: &CliClient,
+        cli_client: &CliClient,
         name: &str,
         key: &SecretBytes<32>,
     ) -> Result<(), CliError> {
-        let cli_client = &client.client;
-        let client = &cli_client.internal;
-
         if !is_valid_name(name) {
             return Err(CliError::InvalidWalletName);
         }
@@ -49,13 +46,7 @@ impl UserWallets {
             self.delete_wallet(name, key)?
         }
 
-        let data = WalletData {
-            seed: client.seed.clone(),
-            wallet_db: client.wallet_db.clone(),
-            frontiers_db: client.frontiers_db.clone(),
-            cached_receivable: cli_client.cached_receivable.clone(),
-            camo_history: cli_client.camo_history.clone(),
-        };
+        let data: WalletData = cli_client.client.as_wallet_data();
         let encrypted = data.encrypt(name, key)?;
         self.wallets.push(encrypted);
         Ok(())
@@ -85,32 +76,19 @@ impl UserWallets {
         let data = self
             .wallets
             .iter()
-            .find(|wallet| wallet.name == name)
+            .find(|wallet| wallet.id == name)
             .ok_or(CliError::WalletNotFound)?
             .decrypt(&key)?;
-        let client = CoreClient {
-            seed: data.seed,
-            config: config.clone(),
-            wallet_db: data.wallet_db,
-            frontiers_db: data.frontiers_db,
-        };
 
-        let client = Client {
-            name: name.into(),
-            key,
-            internal: client,
-            cached_receivable: data.cached_receivable,
-            camo_history: data.camo_history,
-            work_client: WorkManager::default(),
-        };
-        Ok(CliClient { client })
+        let client = data.to_client(config);
+        Ok(CliClient { name: name.into(), key, client })
     }
 
     fn delete_wallet(&mut self, name: &str, key: &SecretBytes<32>) -> Result<(), CliError> {
         let index = self
             .wallets
             .iter()
-            .position(|wallet| wallet.name == name)
+            .position(|wallet| wallet.id == name)
             .ok_or(CliError::WalletNotFound)?;
         if self.wallets[index].decrypt(key).is_ok() {
             self.wallets.remove(index);
@@ -149,7 +127,7 @@ pub fn get_wallet_names() -> Result<Vec<String>, CliError> {
     Ok(wallets
         .wallets
         .iter()
-        .map(|wallet| wallet.name.clone())
+        .map(|wallet| wallet.id.clone())
         .collect())
 }
 

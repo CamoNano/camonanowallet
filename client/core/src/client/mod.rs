@@ -40,7 +40,7 @@ pub(crate) fn choose_representatives(
         .clone()
 }
 
-#[derive(Debug, Zeroize)]
+#[derive(Debug, Clone, Zeroize)]
 pub struct CoreClient {
     pub seed: WalletSeed,
     pub config: CoreClientConfig,

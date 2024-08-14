@@ -28,18 +28,20 @@ const SAVE_TIMER: Duration = Duration::from_millis(2000);
 
 #[derive(Debug, Zeroize, ZeroizeOnDrop)]
 struct CliClient {
+    name: String,
+    key: SecretBytes<32>,
     client: Client,
 }
 impl CliClient {
     fn new(seed: WalletSeed, name: String, key: SecretBytes<32>) -> Result<CliClient, CliError> {
-        let client = Client::new(seed, name, key, load_config()?)?;
-        Ok(CliClient { client })
+        let client = Client::new(seed, load_config()?)?;
+        Ok(CliClient { name, key, client })
     }
 
     fn save_to_disk(&mut self) -> Result<(), CliError> {
         debug!("Saving wallet to disk");
-        save_config(self.client.internal.config.clone().into())?;
-        save_wallet_overriding(self, &self.client.name, &self.client.key)
+        save_config(self.client.core.config.clone().into())?;
+        save_wallet_overriding(self, &self.name, &self.key)
     }
 
     async fn work_cache_loop(mut self, stop: Receiver<()>) -> Result<CliClient, CliError> {
@@ -113,7 +115,7 @@ impl WalletFrontend for CliClient {
     }
 
     fn authenticate(&self) -> Result<(), client::ClientError> {
-        if prompt_password()? == self.client.key {
+        if prompt_password()? == self.key {
             Ok(())
         } else {
             Err(ClientError::InvalidPassword(aes_gcm::Error))

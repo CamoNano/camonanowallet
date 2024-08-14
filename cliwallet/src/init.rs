@@ -95,9 +95,9 @@ impl NewArgs {
         let seed = WalletSeed::from(rand::random::<[u8; 32]>());
         println!("seed: {}", seed.as_hex());
 
-        let client = CliClient::new(seed, self.name, key)?;
-        save_wallet(&client, &client.client.name, &client.client.key)?;
-        Ok(Some(client))
+        let cli_client = CliClient::new(seed, self.name, key)?;
+        save_wallet(&cli_client, &cli_client.name, &cli_client.key)?;
+        Ok(Some(cli_client))
     }
 }
 
@@ -117,9 +117,9 @@ impl ImportArgs {
         let key = prompt_confirmed_password()?;
         let seed = WalletSeed::from(self.seed.0);
 
-        let client = CliClient::new(seed, self.name, key)?;
-        save_wallet(&client, &client.client.name, &client.client.key)?;
-        Ok(Some(client))
+        let cli_client = CliClient::new(seed, self.name, key)?;
+        save_wallet(&cli_client, &cli_client.name, &cli_client.key)?;
+        Ok(Some(cli_client))
     }
 }
 

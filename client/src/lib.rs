@@ -10,13 +10,14 @@ pub mod types;
 
 use core_client::{
     rpc::WorkManager, Account, CamoAccount, CoreClient, CoreClientConfig, Receivable, RescanData,
-    SecretBytes, WalletSeed,
+    WalletSeed,
 };
 use defaults::{default_representatives, default_rpcs};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use types::CamoTxSummary;
 use zeroize::{Zeroize, ZeroizeOnDrop};
+use storage::WalletData;
 
 pub use core_client as core;
 pub use error::ClientError;
@@ -59,42 +60,36 @@ pub trait WalletFrontend {
 
 #[derive(Debug, Zeroize, ZeroizeOnDrop)]
 pub struct Client {
-    pub name: String,
-    pub key: SecretBytes<32>,
-    pub internal: CoreClient,
+    pub core: CoreClient,
     #[zeroize(skip)]
-    pub cached_receivable: HashMap<[u8; 32], Receivable>,
+    pub receivable: HashMap<[u8; 32], Receivable>,
     pub camo_history: Vec<CamoTxSummary>,
     #[zeroize(skip)]
-    pub work_client: WorkManager,
+    pub work: WorkManager,
 }
 impl Client {
     pub fn new(
         seed: WalletSeed,
-        name: String,
-        key: SecretBytes<32>,
         config: CoreClientConfig,
     ) -> Result<Client, ClientError> {
         let client = Client {
-            name,
-            key,
-            internal: CoreClient::new(seed, config),
-            cached_receivable: HashMap::new(),
+            core: CoreClient::new(seed, config),
+            receivable: HashMap::new(),
             camo_history: vec![],
-            work_client: WorkManager::default(),
+            work: WorkManager::default(),
         };
         Ok(client)
     }
 
     /// Remove this account's receivable transactions from the DB
     fn remove_receivable(&mut self, account: &Account) {
-        self.cached_receivable
+        self.receivable
             .retain(|_, receivable| &receivable.recipient != account);
     }
 
     fn insert_receivable(&mut self, receivables: Vec<Receivable>) {
         for receivable in receivables {
-            self.cached_receivable
+            self.receivable
                 .insert(receivable.block_hash, receivable);
         }
     }
@@ -103,25 +98,25 @@ impl Client {
     /// This method works for both normal and derived Nano accounts.
     fn remove_account(&mut self, account: &Account) -> Result<(), ClientError> {
         self.remove_receivable(account);
-        self.internal.remove_account(account)?;
+        self.core.remove_account(account)?;
         Ok(())
     }
 
     /// Remove a camo account, and its derived accounts, from all DB's.
     fn remove_camo_account(&mut self, camo_account: &CamoAccount) -> Result<(), ClientError> {
-        let derived = self.internal.get_derived_accounts_from_master(camo_account);
+        let derived = self.core.get_derived_accounts_from_master(camo_account);
         for account in derived {
             self.remove_receivable(&account)
         }
 
         self.remove_receivable(&camo_account.signer_account());
-        self.internal.remove_camo_account(camo_account)?;
+        self.core.remove_camo_account(camo_account)?;
         Ok(())
     }
 
     fn handle_rescan(&mut self, rescan: RescanData) {
-        self.internal.set_new_frontiers(rescan.new_frontiers);
-        self.internal
+        self.core.set_new_frontiers(rescan.new_frontiers);
+        self.core
             .wallet_db
             .derived_account_db
             .insert_many(rescan.derived_info);
@@ -135,18 +130,28 @@ impl Client {
     pub async fn update_work_cache(&mut self) -> Result<bool, ClientError> {
         // Handle finished requests
         let should_save = self
-            .internal
-            .handle_work_results(&mut self.work_client)
+            .core
+            .handle_work_results(&mut self.work)
             .await?;
 
         // Make new requests
-        for work_hash in self.internal.frontiers_db.needs_work() {
-            if self.work_client.n_requests() >= 2 {
+        for work_hash in self.core.frontiers_db.needs_work() {
+            if self.work.n_requests() >= 2 {
                 break;
             }
-            self.work_client
-                .request_work(&self.internal.config, work_hash);
+            self.work
+                .request_work(&self.core.config, work_hash);
         }
         Ok(should_save)
+    }
+
+    pub fn as_wallet_data(&self) -> WalletData {
+        WalletData {
+            seed: self.core.seed.clone(),
+            wallet_db: self.core.wallet_db.clone(),
+            frontiers_db: self.core.frontiers_db.clone(),
+            cached_receivable: self.receivable.clone(),
+            camo_history: self.camo_history.clone(),
+        }
     }
 }
