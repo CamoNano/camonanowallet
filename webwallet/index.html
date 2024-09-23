@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camo Nano Web Wallet</title>
+    <link rel="stylesheet" href="main.css">
+</head>
+<body>
+    <div class="window-container">
+        <div class="tabs">
+            <div class="tab active" data-tab="send">Send</div>
+            <div class="tab" data-tab="receive">Receive</div>
+            <div class="tab" data-tab="history">Camo History</div>
+            <div class="tab" data-tab="settings">Settings</div>
+        </div>
+
+        <div class="top-container">
+            <button class="refresh-button" style="float:left;" onclick="refresh()">Refresh</button>
+            <div class="balance" id="balance" style="float:right;">Wallet balance: 0 Nano</div>
+        </div>
+
+        <div class="top-options-container">
+            <div class="toggle-container">
+                <span style="margin-right: 5px;">Camo</span>
+                <label class="toggle-camo">
+                    <input type="checkbox" id="toggle-camo">
+                    <span class="camo-slider"></span>
+                </label>
+            </div>
+            <button class="advanced-options-button" id="toggle-advanced-options">Advanced Options</button>
+        </div>
+
+        <div id="send" class="tab-content active">
+            Sender:
+            <div class="dropdown" id="send-address-list">
+                <div class="selected-option">Select</div>
+                <div class="options" style="display: none;"></div>
+            </div>
+
+            <label for="recipient" id="recipient-label">Recipient (nano_ address):</label>
+            <input type="text" id="recipient" placeholder="Nano Address">
+
+            <label for="amount">Amount:</label>
+            <input type="text" id="amount" placeholder="Amount">
+
+            <button disabled>Send</button>
+        </div>
+
+        <div id="receive" class="tab-content">
+            Your Addresses:
+            <div class="dropdown" id="receive-address-list">
+                <div class="selected-option" id="receive-address">Select</div>
+                <div class="options" style="display: none;"></div>
+            </div>
+
+            <div class="advanced-options-container" id="advanced-options">
+                <div style="display: flex; align-items: center;">
+                    <span style="margin-right: 5px;"><b>Generate at index</b>:</span>
+                    <input type="number" id="generate-index" disabled="true" value="0" min="0" max="4294967295" style="width: 100px;">
+                    <div class="toggle-container">
+                        <label for="auto-index-checkbox" style="margin-left: 5px; margin-right: 5px;">Auto?</label>
+                        <input type="checkbox" checked="true" id="auto-index-checkbox">
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; gap: 10px;">
+                <button id="generate-address">Generate Address</button>
+                <button id="copy-address" style="background-color: #0f67da;">Copy Address</button>
+                <button id="remove-address" style="background-color: #ca2e2e;">Remove Address</button>
+            </div>
+        </div>
+
+        <div id="history" class="tab-content">
+        </div>
+
+        <div id="settings" class="tab-content">
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+[package]
+name = "webwallet"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+client = { workspace = true }
+thiserror = { workspace = true }
+zeroize = { workspace = true, features = ["zeroize_derive"] }
+rand = { workspace = true }
+hex = { workspace = true }
+log = { workspace = true, features = ["std"] }
+bincode = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+aes-gcm = { workspace = true }
+wasm-bindgen = { workspace = true }
+web-sys = { workspace = true, features = ["Window", "Storage"] }

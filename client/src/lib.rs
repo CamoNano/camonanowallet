@@ -15,9 +15,9 @@ use core_client::{
 use defaults::{default_representatives, default_rpcs};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use storage::WalletData;
 use types::CamoTxSummary;
 use zeroize::{Zeroize, ZeroizeOnDrop};
-use storage::WalletData;
 
 pub use core_client as core;
 pub use error::ClientError;
@@ -68,10 +68,7 @@ pub struct Client {
     pub work: WorkManager,
 }
 impl Client {
-    pub fn new(
-        seed: WalletSeed,
-        config: CoreClientConfig,
-    ) -> Result<Client, ClientError> {
+    pub fn new(seed: WalletSeed, config: CoreClientConfig) -> Result<Client, ClientError> {
         let client = Client {
             core: CoreClient::new(seed, config),
             receivable: HashMap::new(),
@@ -89,8 +86,7 @@ impl Client {
 
     fn insert_receivable(&mut self, receivables: Vec<Receivable>) {
         for receivable in receivables {
-            self.receivable
-                .insert(receivable.block_hash, receivable);
+            self.receivable.insert(receivable.block_hash, receivable);
         }
     }
 
@@ -129,18 +125,14 @@ impl Client {
     /// Saves finished requests and makes new ones (if neccessary).
     pub async fn update_work_cache(&mut self) -> Result<bool, ClientError> {
         // Handle finished requests
-        let should_save = self
-            .core
-            .handle_work_results(&mut self.work)
-            .await?;
+        let should_save = self.core.handle_work_results(&mut self.work).await?;
 
         // Make new requests
         for work_hash in self.core.frontiers_db.needs_work() {
             if self.work.n_requests() >= 2 {
                 break;
             }
-            self.work
-                .request_work(&self.core.config, work_hash);
+            self.work.request_work(&self.core.config, work_hash);
         }
         Ok(should_save)
     }

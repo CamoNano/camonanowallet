@@ -81,7 +81,11 @@ impl UserWallets {
             .decrypt(&key)?;
 
         let client = data.to_client(config);
-        Ok(CliClient { name: name.into(), key, client })
+        Ok(CliClient {
+            name: name.into(),
+            key,
+            client,
+        })
     }
 
     fn delete_wallet(&mut self, name: &str, key: &SecretBytes<32>) -> Result<(), CliError> {

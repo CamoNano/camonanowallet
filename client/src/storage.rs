@@ -1,5 +1,5 @@
 use super::types::CamoTxSummary;
-use crate::{ClientError, CoreClient, Client};
+use crate::{Client, ClientError, CoreClient};
 use aes_gcm::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     Aes256Gcm, Key, Nonce,
@@ -7,10 +7,9 @@ use aes_gcm::{
 use argon2::Argon2;
 use core_client::{
     frontiers::FrontiersDB,
-    wallet::{WalletDB, WalletSeed},
-    CoreClientConfig,
     rpc::WorkManager,
-    Receivable, SecretBytes,
+    wallet::{WalletDB, WalletSeed},
+    CoreClientConfig, Receivable, SecretBytes,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
