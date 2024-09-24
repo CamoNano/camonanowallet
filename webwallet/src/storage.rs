@@ -17,7 +17,7 @@ const STORAGE_LOG_LEVEL_KEY: &str = "camonano_wallet_log_level";
 
 fn save_encrypted_wallet(wallet: EncryptedWallet) -> Result<(), AppError> {
     let storage = get_storage()?;
-    set_item(&storage, STORAGE_WALLET_ID_KEY, &wallet.id)?;
+    set_item(&storage, STORAGE_WALLET_ID_KEY, &wallet.name)?;
     set_item(&storage, STORAGE_WALLET_SALT_KEY, &wallet.salt)?;
     set_item(&storage, STORAGE_WALLET_NONCE_KEY, &wallet.nonce)?;
     set_item(&storage, STORAGE_WALLET_DATA_KEY, &wallet.data)?;
@@ -26,15 +26,15 @@ fn save_encrypted_wallet(wallet: EncryptedWallet) -> Result<(), AppError> {
 
 fn load_encrypted_wallet() -> Result<Option<EncryptedWallet>, AppError> {
     let storage = get_storage()?;
-    let id = get_item(&storage, STORAGE_WALLET_ID_KEY)?;
+    let name = get_item(&storage, STORAGE_WALLET_ID_KEY)?;
     let salt = get_item(&storage, STORAGE_WALLET_SALT_KEY)?;
     let nonce = get_item(&storage, STORAGE_WALLET_NONCE_KEY)?;
     let data = get_item(&storage, STORAGE_WALLET_DATA_KEY)?;
 
-    match (id, salt, nonce, data) {
-        (Some(id), Some(salt), Some(nonce), Some(data)) => {
+    match (name, salt, nonce, data) {
+        (Some(name), Some(salt), Some(nonce), Some(data)) => {
             let wallet = EncryptedWallet {
-                id,
+                name,
                 salt,
                 nonce,
                 data,
@@ -79,13 +79,14 @@ pub fn save_wallet(cli_client: &AppClient, key: &SecretBytes<32>) -> Result<(), 
 }
 
 /// Load the wallet from storage
-pub fn load_wallet(key: SecretBytes<32>) -> Result<AppClient, AppError> {
+pub fn load_wallet(key: SecretBytes<32>) -> Result<Option<AppClient>, AppError> {
     let config = load_config()?;
-    let data = load_encrypted_wallet()?
-        .ok_or(AppError::WalletNotInitialized)?
-        .decrypt(&key)?;
-    let client = data.to_client(config);
-    Ok(AppClient { key, client })
+    if let Some(wallet) = load_encrypted_wallet()? {
+        let client = wallet.decrypt(&key)?.to_client(config);
+        Ok(Some(AppClient { key, client }))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Delete the wallet from storage

@@ -35,14 +35,22 @@ pub fn import_client() -> Result<AppClient, String> {
 }
 
 #[wasm_bindgen]
-pub fn load_client() -> Result<AppClient, String> {
+pub fn load_client() -> Result<Option<AppClient>, String> {
     init::load().map_err(|err| err.to_string())
 }
 
-fn main() {
+#[wasm_bindgen]
+pub fn launch_client() -> Result<AppClient, String> {
+    let loaded = init::load().map_err(|err| err.to_string())?;
+    web_api::log!("Creating new wallet");
+    Ok(loaded.unwrap_or(new_client()?))
+}
+
+#[wasm_bindgen]
+pub fn main() {
     init();
 
-    // let client: AppClient = match todo!() {
+    // let client: AppClient = match launch_client() {
     //     Ok(client) => client,
     //     Err(err) => {
     //         web_api::alert!("{:?}", err);
@@ -50,5 +58,5 @@ fn main() {
     //     }
     // };
 
-    // client.expect("Failed to initialize client").start();
+    // client.start();
 }

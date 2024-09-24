@@ -50,7 +50,7 @@ impl WalletData {
         self.zeroize();
         data.zeroize();
         Ok(EncryptedWallet {
-            id: id.into(),
+            name: id.into(),
             salt: hex::encode(salt),
             nonce: hex::encode(nonce),
             data: hex::encode(encrypted),
@@ -76,7 +76,7 @@ impl WalletData {
 
 #[derive(Debug, Clone, Zeroize, ZeroizeOnDrop, Serialize, Deserialize)]
 pub struct EncryptedWallet {
-    pub id: String,
+    pub name: String,
     pub salt: String,
     pub nonce: String,
     pub data: String,

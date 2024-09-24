@@ -21,7 +21,7 @@ pub fn import() -> Result<AppClient, AppError> {
     Ok(cli_client)
 }
 
-pub fn load() -> Result<AppClient, AppError> {
+pub fn load() -> Result<Option<AppClient>, AppError> {
     let client = load_wallet(prompt_password()?)?;
     Ok(client)
 }

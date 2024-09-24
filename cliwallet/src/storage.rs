@@ -30,7 +30,7 @@ impl UserWallets {
     }
 
     fn wallet_exists(&self, name: &str) -> bool {
-        self.wallets.iter().any(|wallet| wallet.id == name)
+        self.wallets.iter().any(|wallet| wallet.name == name)
     }
 
     fn save_wallet_override(
@@ -76,7 +76,7 @@ impl UserWallets {
         let data = self
             .wallets
             .iter()
-            .find(|wallet| wallet.id == name)
+            .find(|wallet| wallet.name == name)
             .ok_or(CliError::WalletNotFound)?
             .decrypt(&key)?;
 
@@ -92,7 +92,7 @@ impl UserWallets {
         let index = self
             .wallets
             .iter()
-            .position(|wallet| wallet.id == name)
+            .position(|wallet| wallet.name == name)
             .ok_or(CliError::WalletNotFound)?;
         if self.wallets[index].decrypt(key).is_ok() {
             self.wallets.remove(index);
@@ -131,7 +131,7 @@ pub fn get_wallet_names() -> Result<Vec<String>, CliError> {
     Ok(wallets
         .wallets
         .iter()
-        .map(|wallet| wallet.id.clone())
+        .map(|wallet| wallet.name.clone())
         .collect())
 }
 
