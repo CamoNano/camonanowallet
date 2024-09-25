@@ -11,7 +11,11 @@ rand = { workspace = true }
 hex = { workspace = true }
 log = { workspace = true, features = ["std"] }
 bincode = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true }
 aes-gcm = { workspace = true }
 wasm-bindgen = { workspace = true }
 web-sys = { workspace = true, features = ["Window", "Storage"] }
+getrandom = { workspace = true, features = ["js"] }
+
+[lib]
+crate-type = ["cdylib", "rlib"]

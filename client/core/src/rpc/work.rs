@@ -1,11 +1,16 @@
 use crate::rpc::{RpcManager, RpcResult};
-use crate::CoreClientConfig;
+use crate::{CoreClientConfig, CoreClientError};
 use log::{debug, info};
 use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
-use tokio::runtime::Handle as TokioHandle;
-use tokio::task::{block_in_place, spawn, JoinHandle};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::thread;
+#[cfg(target_arch = "wasm32")]
+use wasm_thread as thread;
+
+use thread::{spawn as spawn_thread, JoinHandle};
 
 const TEN_MILLIS: Duration = Duration::from_millis(10);
 
@@ -17,11 +22,11 @@ pub struct WorkResult {
 pub type WorkHandle = JoinHandle<WorkResult>;
 
 fn resolve_handle(handle: WorkHandle, work_hash: [u8; 32]) -> WorkResult {
-    match block_in_place(|| TokioHandle::current().block_on(handle)) {
+    match handle.join() {
         Ok(result) => result,
-        Err(err) => WorkResult {
+        Err(_) => WorkResult {
             work_hash,
-            rpc_result: Err(err.into()),
+            rpc_result: Err(CoreClientError::ThreadHandleError),
         },
     }
 }
@@ -40,10 +45,34 @@ impl WorkManager {
         }
 
         let config = config.clone();
-        let worker = spawn(async move {
+        let worker = spawn_thread(move || {
             let as_hex = hex::encode(work_hash).to_uppercase();
             debug!("WorkManager: getting work for {as_hex}");
-            let rpc_result = RpcManager().work_generate(&config, work_hash, None).await;
+
+            // TODO: can all these `expect()`s somehow be recovered from? If so, implement error handling.
+            #[cfg(not(target_arch = "wasm32"))]
+            let rpc_result = {
+                let rpc_future = RpcManager().work_generate(&config, work_hash, None);
+                let rt = tokio::runtime::Runtime::new()
+                    .expect("WorkManager::request_work() failed to create new Tokio runtime");
+                rt.block_on(rpc_future)
+            };
+            #[cfg(target_arch = "wasm32")]
+            let rpc_result = {
+                // "If it's stupid and it works, it's not stupid"
+                let (tx, rx) = std::sync::mpsc::channel();
+                let config = config.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let rpc_future = RpcManager().work_generate(&config, work_hash, None);
+                    tx.send(rpc_future.await).expect(
+                        "WorkManager::request_work() failed to send RPC result through channel",
+                    );
+                });
+                rx.recv().expect(
+                    "WorkManager::request_work() failed to receive RPC result through channel",
+                )
+            };
+
             debug!("WorkManager: got work for {as_hex}");
             WorkResult {
                 work_hash,

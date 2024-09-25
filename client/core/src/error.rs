@@ -1,6 +1,5 @@
 use nanopyrs::{rpc::RpcError, NanoError};
 use thiserror::Error;
-use tokio::task::JoinError;
 
 #[derive(Debug, Error)]
 pub enum CoreClientError {
@@ -8,8 +7,8 @@ pub enum CoreClientError {
     NanoError(#[from] NanoError),
     #[error(transparent)]
     RpcError(#[from] RpcError),
-    #[error(transparent)]
-    JoinError(#[from] JoinError),
+    #[error("could not resolve thread handle")]
+    ThreadHandleError,
     #[error("the given RPC command could not be performed on any known node")]
     RpcCommandFailed,
     #[error("no usable RPC could be found")]

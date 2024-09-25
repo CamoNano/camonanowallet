@@ -1,6 +1,11 @@
 #![warn(unused_crate_dependencies, unsafe_code)]
 #![allow(unused)] // TODO: remove
 
+// We don't use `getrandom` directly, as it is a subdependency.
+// However, we include this in Cargo.toml to force usage of the "js" feature,
+// which is necessary for WASM compilation to succeed.
+use getrandom as _;
+
 mod app_client;
 mod error;
 mod init;
@@ -14,7 +19,7 @@ use logging::Logger;
 use storage::get_log_level;
 use wasm_bindgen::prelude::*;
 
-/// Initialize the wallet software. Should only be run once.
+/// Initialize the software. Should only be run once.
 #[wasm_bindgen]
 pub fn init() {
     let logger: Logger = get_log_level().unwrap().into();

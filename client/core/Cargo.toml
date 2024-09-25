@@ -13,4 +13,10 @@ log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 futures = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm_thread = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }
