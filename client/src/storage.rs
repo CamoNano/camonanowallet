@@ -7,8 +7,8 @@ use aes_gcm::{
 use argon2::Argon2;
 use core_client::{
     frontiers::FrontiersDB,
-    rpc::WorkManager,
     wallet::{WalletDB, WalletSeed},
+    work::WorkManager,
     CoreClientConfig, Receivable, SecretBytes,
 };
 use serde::{Deserialize, Serialize};

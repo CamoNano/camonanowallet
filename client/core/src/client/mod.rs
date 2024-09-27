@@ -5,8 +5,9 @@ mod send;
 use super::config::CoreClientConfig;
 use super::error::CoreClientError;
 use super::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
-use super::rpc::{ClientRpc, RpcFailures, RpcResult, RpcSuccess, WorkManager};
+use super::rpc::{ClientRpc, RpcFailures, RpcResult, RpcSuccess};
 use super::wallet::{DerivedAccountInfo, WalletDB, WalletSeed};
+use super::work::WorkManager;
 use camo::{get_camo_receivable, rescan_notifications_partial};
 use log::{error, trace, warn};
 use nanopyrs::{

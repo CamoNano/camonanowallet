@@ -9,7 +9,7 @@ pub mod storage;
 pub mod types;
 
 use core_client::{
-    rpc::WorkManager, Account, CamoAccount, CoreClient, CoreClientConfig, Receivable, RescanData,
+    work::WorkManager, Account, CamoAccount, CoreClient, CoreClientConfig, Receivable, RescanData,
     WalletSeed,
 };
 use defaults::{default_representatives, default_rpcs};

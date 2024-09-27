@@ -2,7 +2,8 @@ use super::RpcManager;
 use crate::config::CoreClientConfig;
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, FrontiersDB, NewFrontiers};
-use crate::rpc::{work::WorkManager, RpcFailures, RpcResult, RpcSuccess};
+use crate::rpc::{RpcFailures, RpcResult, RpcSuccess};
+use crate::work::WorkManager;
 use nanopyrs::{Account, Block};
 use std::iter::zip;
 

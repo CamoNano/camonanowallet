@@ -8,6 +8,7 @@ pub mod constants;
 pub mod frontiers;
 pub mod rpc;
 pub mod wallet;
+pub mod work;
 
 pub use client::{CamoPayment, CoreClient, Payment, RescanData};
 pub use config::CoreClientConfig;

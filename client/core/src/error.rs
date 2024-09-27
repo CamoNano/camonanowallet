@@ -7,8 +7,8 @@ pub enum CoreClientError {
     NanoError(#[from] NanoError),
     #[error(transparent)]
     RpcError(#[from] RpcError),
-    #[error("could not resolve thread handle")]
-    ThreadHandleError,
+    #[error("could not resolve thread handle ({0})")]
+    ThreadHandleError(String),
     #[error("the given RPC command could not be performed on any known node")]
     RpcCommandFailed,
     #[error("no usable RPC could be found")]

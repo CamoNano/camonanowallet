@@ -1,7 +1,8 @@
 use super::{choose_representatives, CoreClient};
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
-use crate::rpc::{ClientRpc, RpcFailures, RpcResult, WorkManager};
+use crate::rpc::{ClientRpc, RpcFailures, RpcResult};
+use crate::work::WorkManager;
 use log::info;
 use nanopyrs::{
     camo::{CamoAccount, Notification},

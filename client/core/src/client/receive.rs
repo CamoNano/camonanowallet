@@ -1,7 +1,8 @@
 use super::{choose_representatives, CoreClient};
 use crate::error::CoreClientError;
 use crate::frontiers::{FrontierInfo, NewFrontiers};
-use crate::rpc::{ClientRpc, RpcFailures, RpcManager, RpcResult, RpcSuccess, WorkManager};
+use crate::rpc::{ClientRpc, RpcFailures, RpcManager, RpcResult, RpcSuccess};
+use crate::work::WorkManager;
 use log::{debug, error, info};
 use nanopyrs::{rpc::Receivable, Account, Block, BlockType, Signature};
 use std::collections::HashMap;
