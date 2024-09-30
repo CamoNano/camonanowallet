@@ -141,10 +141,12 @@ fn main() {
         }
     };
 
-    match logger.start_logging() {
-        Ok(()) => (),
-        Err(err) => println!("Failed to start logging: {err}"),
+    if let Err(err) = logger.start_logging() {
+        println!("Failed to start logging: {err}");
     }
 
-    client.expect("Failed to initialize client").start();
+    // May be None if not opening a wallet
+    if let Some(client) = client {
+        client.start();
+    }
 }

@@ -1,6 +1,6 @@
 use super::app_client::AppClient;
 use super::error::AppError;
-use super::storage::{load_wallet, save_wallet};
+use super::storage::{load_wallet, save_wallet, wallet_exists};
 use super::web_api::{alert, prompt, prompt_new_password, prompt_password};
 use client::{core::WalletSeed, types::Hex32Bytes as Seed};
 use std::str::FromStr;
@@ -22,6 +22,10 @@ pub fn import() -> Result<AppClient, AppError> {
 }
 
 pub fn load() -> Result<Option<AppClient>, AppError> {
-    let client = load_wallet(prompt_password()?)?;
-    Ok(client)
+    if wallet_exists() {
+        let client = load_wallet(prompt_password()?)?;
+        Ok(client)
+    } else {
+        Ok(None)
+    }
 }

@@ -21,7 +21,7 @@ use wasm_bindgen::prelude::*;
 
 /// Initialize the software. Should only be run once.
 #[wasm_bindgen]
-pub fn init() {
+pub fn init_client() {
     let logger: Logger = get_log_level().unwrap().into();
     match logger.start_logging() {
         Ok(()) => (),
@@ -30,30 +30,34 @@ pub fn init() {
 }
 
 #[wasm_bindgen]
-pub fn new_client() -> Result<AppClient, String> {
+pub fn new_wallet() -> Result<AppClient, String> {
     init::new().map_err(|err| err.to_string())
 }
 
 #[wasm_bindgen]
-pub fn import_client() -> Result<AppClient, String> {
+pub fn import_wallet() -> Result<AppClient, String> {
     init::import().map_err(|err| err.to_string())
 }
 
 #[wasm_bindgen]
-pub fn load_client() -> Result<Option<AppClient>, String> {
+pub fn load_wallet() -> Result<Option<AppClient>, String> {
     init::load().map_err(|err| err.to_string())
 }
 
 #[wasm_bindgen]
-pub fn launch_client() -> Result<AppClient, String> {
+pub fn launch_wallet() -> Result<AppClient, String> {
     let loaded = init::load().map_err(|err| err.to_string())?;
-    web_api::log!("Creating new wallet");
-    Ok(loaded.unwrap_or(new_client()?))
+    if let Some(wallet) = loaded {
+        Ok(wallet)
+    } else {
+        web_api::log!("Creating new wallet");
+        Ok(loaded.unwrap_or(new_wallet()?))
+    }
 }
 
 #[wasm_bindgen]
 pub fn main() {
-    init();
+    init_client();
 
     // let client: AppClient = match launch_client() {
     //     Ok(client) => client,

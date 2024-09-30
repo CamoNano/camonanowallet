@@ -89,6 +89,12 @@ pub fn load_wallet(key: SecretBytes<32>) -> Result<Option<AppClient>, AppError> 
     }
 }
 
+/// Returns `true` if a valid encrypted wallet exists in storage, otherwise `false`
+pub fn wallet_exists() -> bool {
+    // TODO: remove redundant wallet loading
+    load_encrypted_wallet().is_ok()
+}
+
 /// Delete the wallet from storage
 pub fn delete_wallet() -> Result<(), AppError> {
     let storage = get_storage()?;

@@ -11,18 +11,10 @@ fn get_key(mut password: String) -> Result<SecretBytes<32>, ClientError> {
     Ok(key)
 }
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    #[allow(unsafe_code)]
-    pub(crate) fn _log(s: &str);
-}
-
 /// API for `console.log(...)`
 macro_rules! log {
     ($($t:tt)*) => {{
-        use $crate::web_api::_log;
-        _log(&format_args!($($t)*).to_string())
+        web_sys::console::log_1(&format_args!($($t)*).to_string().into())
     }}
 }
 pub(crate) use log;

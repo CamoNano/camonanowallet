@@ -79,6 +79,17 @@
         </div>
     </div>
 
-    <script src="main.js"></script>
+    <script type="module">
+        import init, { init_client, launch_wallet } from './pkg/webwallet.js';
+        init({}).then(() => {
+            console.log("WASM loaded successfully");
+            localStorage.setItem("camonano_wallet_log_level", "5");
+            init_client();
+            launch_wallet();
+        }).catch(err => {
+            console.error("Failed to initialize WASM:", err);
+        });
+    </script>
+    <script type="module" src="main.js"></script>
 </body>
 </html>

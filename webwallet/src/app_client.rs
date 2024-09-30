@@ -6,18 +6,14 @@ use client::{
     Client, ClientError, Command, WalletFrontend,
 };
 use log::debug;
-use std::io::{stdin, stdout, Write};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
-use std::time::{Duration, Instant};
-use tokio::runtime::Runtime;
-use tokio::task;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-/// The wallet will only ever save to disk this often in the work cache loop.
-/// Note that this does not mean that we will *always* save this often:
-/// This is just a speed limit.
-const SAVE_TIMER: Duration = Duration::from_millis(2000);
+// /// The wallet will only ever save to disk this often in the work cache loop.
+// /// Note that this does not mean that we will *always* save this often:
+// /// This is just a speed limit.
+// const SAVE_TIMER: Duration = Duration::from_millis(2000);
 
 #[wasm_bindgen]
 #[derive(Debug, Zeroize, ZeroizeOnDrop)]
@@ -37,50 +33,50 @@ impl AppClient {
         save_wallet(self, &self.key)
     }
 
-    async fn work_cache_loop(mut self, stop: Receiver<()>) -> Result<AppClient, AppError> {
-        // Try not to spam the disk:
-        // Save at most once per 2 seconds.
-        let mut last_save = Instant::now();
-        let mut should_save = false;
+    // async fn work_cache_loop(mut self, stop: Receiver<()>) -> Result<AppClient, AppError> {
+    //     // Try not to spam the disk:
+    //     // Save at most once per 2 seconds.
+    //     let mut last_save = Instant::now();
+    //     let mut should_save = false;
 
-        loop {
-            let message = stop.recv_timeout(Duration::from_millis(10));
-            // No stop signal (timeout)
-            if let Err(RecvTimeoutError::Timeout) = message {
-                // Save to disk if cache has been updated
-                should_save |= self.client.update_work_cache().await?;
+    //     loop {
+    //         let message = stop.recv_timeout(Duration::from_millis(10));
+    //         // No stop signal (timeout)
+    //         if let Err(RecvTimeoutError::Timeout) = message {
+    //             // Save to disk if cache has been updated
+    //             should_save |= self.client.update_work_cache().await?;
 
-                if should_save && last_save.elapsed() >= SAVE_TIMER {
-                    self.save_to_disk()?;
-                    last_save = Instant::now();
-                    should_save = false;
-                }
-            }
-            // Yes stop signal
-            else {
-                break;
-            }
-        }
-        Ok(self)
-    }
+    //             if should_save && last_save.elapsed() >= SAVE_TIMER {
+    //                 self.save_to_disk()?;
+    //                 last_save = Instant::now();
+    //                 should_save = false;
+    //             }
+    //         }
+    //         // Yes stop signal
+    //         else {
+    //             break;
+    //         }
+    //     }
+    //     Ok(self)
+    // }
 
     async fn _start_cli(mut self) {
         loop {
             print!("> ");
-            stdout().flush().expect("failed to flush stdout");
+            // stdout().flush().expect("failed to flush stdout");
 
-            let (sender, receiver) = channel();
+            // let (sender, receiver) = channel();
 
-            let work_cache_loop = task::spawn(self.work_cache_loop(receiver));
+            // let work_cache_loop = spawn(self.work_cache_loop(receiver));
 
             let mut input = String::new();
-            stdin().read_line(&mut input).expect("failed to read stdin");
+            // stdin().read_line(&mut input).expect("failed to read stdin");
 
-            sender.send(()).expect("Failed to stop work cache loop");
-            self = work_cache_loop
-                .await
-                .expect("Failed to await work cache loop")
-                .expect("Error in work cache loop");
+            // sender.send(()).expect("Failed to stop work cache loop");
+            // self = work_cache_loop
+            //     .await
+            //     .expect("Failed to await work cache loop")
+            //     .expect("Error in work cache loop");
 
             let result = Command::execute(&mut self, &input).await;
             self.save_to_disk().expect("Failed to save wallet to disk");
@@ -94,8 +90,9 @@ impl AppClient {
     }
 
     fn start(self) {
-        let rt = Runtime::new().expect("could not create Tokio runtime");
-        rt.block_on(self._start_cli());
+        spawn_local(async move {
+            self._start_cli().await;
+        });
     }
 }
 impl WalletFrontend for AppClient {

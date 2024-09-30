@@ -11,10 +11,10 @@ rand = { workspace = true }
 hex = { workspace = true }
 log = { workspace = true, features = ["std"] }
 bincode = { workspace = true }
-tokio = { workspace = true }
 aes-gcm = { workspace = true }
 wasm-bindgen = { workspace = true }
-web-sys = { workspace = true, features = ["Window", "Storage"] }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true, features = ["Window", "Storage", "console"] }
 getrandom = { workspace = true, features = ["js"] }
 
 [lib]
