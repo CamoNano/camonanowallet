@@ -1,7 +1,7 @@
 # Camo Nano Wallet
 
 A privacy-oriented wallet for the [Nano](https://nano.org/) cryptocurrency.
-There is currently only a CLI version of this wallet, but a web verson is being developed.
+There is currently only a CLI version of this wallet.
 
 This wallet is intended to act as a reference implementation for Camo Nano. See below for more details.
 
