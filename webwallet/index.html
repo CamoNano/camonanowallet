@@ -80,12 +80,17 @@
     </div>
 
     <script type="module">
-        import init, { init_client, launch_wallet } from './pkg/webwallet.js';
+        import init, { init_client, launch_wallet, start_client } from './pkg/webwallet.js';
         init({}).then(() => {
             console.log("WASM loaded successfully");
             localStorage.setItem("camonano_wallet_log_level", "5");
             init_client();
-            launch_wallet();
+            try {
+                const appClient = launch_wallet();
+                start_client(appClient);
+            } catch (err) {
+                console.error("Error launching wallet:", err);
+            }
         }).catch(err => {
             console.error("Failed to initialize WASM:", err);
         });

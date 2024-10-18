@@ -56,16 +56,6 @@ pub fn launch_wallet() -> Result<AppClient, String> {
 }
 
 #[wasm_bindgen]
-pub fn main() {
-    init_client();
-
-    // let client: AppClient = match launch_client() {
-    //     Ok(client) => client,
-    //     Err(err) => {
-    //         web_api::alert!("{:?}", err);
-    //         return;
-    //     }
-    // };
-
-    // client.start();
+pub fn start_client(client: AppClient) {
+    client.start();
 }

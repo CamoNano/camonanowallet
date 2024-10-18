@@ -62,14 +62,16 @@ impl AppClient {
 
     async fn _start_cli(mut self) {
         loop {
-            print!("> ");
+            let mut input = String::new();
+
+            // print!("> ");
             // stdout().flush().expect("failed to flush stdout");
 
             // let (sender, receiver) = channel();
 
             // let work_cache_loop = spawn(self.work_cache_loop(receiver));
 
-            let mut input = String::new();
+            let mut input = web_api::prompt!("Enter command: ").unwrap();
             // stdin().read_line(&mut input).expect("failed to read stdin");
 
             // sender.send(()).expect("Failed to stop work cache loop");
@@ -89,7 +91,7 @@ impl AppClient {
         }
     }
 
-    fn start(self) {
+    pub(crate) fn start(self) {
         spawn_local(async move {
             self._start_cli().await;
         });
