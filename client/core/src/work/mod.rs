@@ -10,9 +10,9 @@ use wasm_impl as work_impl;
 
 use crate::rpc::RpcResult;
 use crate::CoreClientConfig;
+use crate::time::{Duration, SystemTime};
 use log::info;
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
 use work_impl::{sleep, WorkHandle};
 
 const TEN_MILLIS: Duration = Duration::from_millis(10);

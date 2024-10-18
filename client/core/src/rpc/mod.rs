@@ -3,7 +3,7 @@ mod manager;
 mod result;
 mod wrapped;
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use crate::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub use client::ClientRpc;
 pub use manager::RpcManager;

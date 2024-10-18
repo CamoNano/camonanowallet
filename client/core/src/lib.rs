@@ -23,3 +23,13 @@ pub use nanopyrs::{
     Account, Block, BlockType, Key, Scalar, SecretBytes, Signature,
 };
 pub use wallet::WalletSeed;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod time {
+    pub use std::time::*;
+}
+
+#[cfg(target_arch = "wasm32")]
+mod time {
+    pub use web_time::*;
+}

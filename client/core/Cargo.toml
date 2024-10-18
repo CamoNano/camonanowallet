@@ -16,6 +16,7 @@ futures = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm_thread = { workspace = true }
+web-time = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
